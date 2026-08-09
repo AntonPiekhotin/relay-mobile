@@ -73,7 +73,7 @@ iOS app is built from Xcode: open `iosApp/iosApp.xcodeproj`. Gradle builds the s
 Build order — do not skip ahead, each phase depends on the previous:
 
 - [x] **1. Shared core** — protocol models, Ktor WebSocket client, auth, connect to gateway from both platforms
-- [ ] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
+- [x] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
 - [ ] **3. Compose UI** — dialog list, chat screen, composer
 - [ ] **4. Push notifications** — FCM + APNs, native both sides
 - [ ] **5. Presence / typing**
@@ -83,7 +83,7 @@ Build order — do not skip ahead, each phase depends on the previous:
 
 The backend is ahead of the client in some areas and behind in others. Current backend state:
 
-- **Implemented:** REST history with cursor pagination, WebSocket send/ack over Kafka, real-time delivery to connected clients.
-- **NOT implemented:** notification service, FCM push, presence, typing, calls, online/offline split.
+- **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, call-log / ICE-server / device-token REST endpoints.
+- **NOT implemented:** client-facing REST history, dialog list, and fallback send (message-service exposes `/internal`-only endpoints the gateway does not route), notification delivery, FCM push, presence, typing, online/offline split.
 
-**Consequence:** until the backend notification service exists, a user who is offline receives nothing until they reopen the app and catch up. Do not build client logic that expects push delivery before phase 4. Do not report the absence of push as a client bug.
+**Consequence:** the client's REST catch-up, history pagination, and fallback send are built against the target contract in `docs/PROTOCOL.md` §5 (`/api/v1/message/**`) and stay inert until the backend ships those endpoints — do not report their `404`s as client bugs. Until the backend notification service exists, a user who is offline receives nothing until they reopen the app and catch up. Do not build client logic that expects push delivery before phase 4. Do not report the absence of push as a client bug.

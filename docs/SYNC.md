@@ -140,6 +140,11 @@ Rules:
 - **Always resend the same `clientMsgId`.** Generating a new UUID on retry creates a duplicate message. This is the single most important rule in this file.
 - **Backoff:** 1s, 2s, 4s, 8s, 16s, 32s, capped at 60s.
 - **Give up** after ~10 attempts or 24 hours → `FAILED`, surfaced to the user.
+- **Only transmitted sends consume attempts.** An unreachable network (or a REST `404` while the
+  fallback endpoint is unshipped) schedules a re-check without touching the attempt budget, so a
+  message composed offline stays `PENDING` until connectivity returns. The 24h window runs from the
+  first actual send attempt, and a manual retry resets both budgets.
+- **A failed socket write is not an attempt** — fall through to REST in the same flush.
 - **Permanent errors are not retried:** `PAYLOAD_TOO_LARGE`, `INVALID_ENVELOPE`, `DIALOG_NOT_FOUND` → straight to `FAILED`.
 - **Fall back to REST when the socket is down.** Do not queue waiting for the socket — a user pressing send during a reconnect window should still succeed.
 - Send in `created_at` order per dialog to preserve intent.

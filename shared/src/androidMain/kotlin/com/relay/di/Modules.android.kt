@@ -1,8 +1,11 @@
 package com.relay.di
 
+import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.relay.auth.AndroidTokenStore
 import com.relay.auth.TokenStore
 import com.relay.config.AppConfig
+import com.relay.db.RelayDb
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -15,4 +18,5 @@ private data class AndroidDevConfig(
 actual val platformModule: Module = module {
     single<AppConfig> { AndroidDevConfig() }
     single<TokenStore> { AndroidTokenStore(androidContext()) }
+    single<SqlDriver> { AndroidSqliteDriver(RelayDb.Schema, androidContext(), "relay.db") }
 }

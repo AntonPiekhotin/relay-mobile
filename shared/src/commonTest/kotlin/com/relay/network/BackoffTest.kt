@@ -38,6 +38,23 @@ class BackoffTest {
         assertEquals(1_000, backoffDelayMillis(-3, FixedRandom(0.5)))
     }
 
+    @Test
+    fun sendBackoffGrowsExponentiallyAndCapsAt60Seconds() {
+        val noJitter = FixedRandom(0.5)
+        assertEquals(1_000, sendBackoffMillis(0, noJitter))
+        assertEquals(2_000, sendBackoffMillis(1, noJitter))
+        assertEquals(32_000, sendBackoffMillis(5, noJitter))
+        assertEquals(60_000, sendBackoffMillis(6, noJitter))
+        assertEquals(60_000, sendBackoffMillis(50, noJitter))
+    }
+
+    @Test
+    fun sendBackoffHasJitter() {
+        val samples = (1..50).map { sendBackoffMillis(4) }.toSet()
+        assertTrue(samples.size > 1)
+        samples.forEach { assertTrue(it in 12_800..19_200, "delay $it out of jitter bounds") }
+    }
+
     private class FixedRandom(private val value: Double) : Random() {
         override fun nextBits(bitCount: Int): Int = 0
         override fun nextDouble(): Double = value

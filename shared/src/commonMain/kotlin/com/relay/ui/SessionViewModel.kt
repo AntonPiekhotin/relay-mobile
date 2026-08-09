@@ -5,8 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.relay.auth.AuthResult
 import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
+import com.relay.db.MessageStore
 import com.relay.network.ConnectionManager
 import com.relay.network.ConnectionState
+import com.relay.sync.Outbox
+import com.relay.sync.SyncEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +17,10 @@ import kotlinx.coroutines.launch
 
 class SessionViewModel(
     private val session: SessionManager,
-    private val connection: ConnectionManager
+    private val connection: ConnectionManager,
+    private val syncEngine: SyncEngine,
+    private val outbox: Outbox,
+    private val store: MessageStore
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = session.state
@@ -31,8 +37,17 @@ class SessionViewModel(
             session.restoreSession()
             session.state.collect { state ->
                 when (state) {
-                    is AuthState.LoggedIn -> connection.start()
-                    is AuthState.LoggedOut -> connection.stop()
+                    is AuthState.LoggedIn -> {
+                        syncEngine.start()
+                        outbox.start()
+                        connection.start()
+                    }
+                    is AuthState.LoggedOut -> {
+                        connection.stop()
+                        outbox.stop()
+                        syncEngine.stop()
+                        store.clearAll()
+                    }
                     is AuthState.Unknown -> Unit
                 }
             }

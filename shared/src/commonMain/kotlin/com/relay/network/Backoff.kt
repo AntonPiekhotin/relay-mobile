@@ -15,3 +15,13 @@ fun backoffDelayMillis(consecutiveFailures: Int, random: Random = Random.Default
     val jitter = JITTER_FLOOR + random.nextDouble() * JITTER_SPAN
     return (base * jitter).toLong()
 }
+
+private const val SEND_MAX_DELAY_MILLIS = 60_000L
+private const val SEND_MAX_EXPONENT = 6
+
+fun sendBackoffMillis(attemptCount: Int, random: Random = Random.Default): Long {
+    val exponent = min(attemptCount.coerceAtLeast(0), SEND_MAX_EXPONENT)
+    val base = min(BASE_DELAY_MILLIS shl exponent, SEND_MAX_DELAY_MILLIS)
+    val jitter = JITTER_FLOOR + random.nextDouble() * JITTER_SPAN
+    return (base * jitter).toLong()
+}

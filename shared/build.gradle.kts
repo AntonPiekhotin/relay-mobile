@@ -6,6 +6,16 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.sqldelight)
+}
+
+sqldelight {
+    databases {
+        create("RelayDb") {
+            packageName.set("com.relay.db")
+            dialect("app.cash.sqldelight:sqlite-3-38-dialect:${libs.versions.sqldelight.get()}")
+        }
+    }
 }
 
 kotlin {
@@ -47,9 +57,11 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.security.crypto)
             implementation(libs.koin.android)
+            implementation(libs.sqldelight.android.driver)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.sqldelight.native.driver)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -69,11 +81,18 @@ kotlin {
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
+            implementation(libs.sqldelight.coroutines)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.coroutines.test)
             implementation(libs.turbine)
+        }
+        getByName("androidHostTest").dependencies {
+            implementation(libs.sqldelight.sqlite.driver)
+        }
+        iosTest.dependencies {
+            implementation(libs.sqldelight.native.driver)
         }
     }
 }

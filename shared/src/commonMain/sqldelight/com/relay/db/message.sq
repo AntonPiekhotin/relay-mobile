@@ -1,0 +1,93 @@
+CREATE TABLE message (
+    local_id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    server_id      TEXT    UNIQUE,
+    client_msg_id  TEXT    UNIQUE,
+    dialog_id      TEXT    NOT NULL,
+    sender_id      TEXT    NOT NULL,
+    text           TEXT    NOT NULL,
+    reply_to       TEXT,
+    created_at     INTEGER NOT NULL,
+    state          TEXT    NOT NULL,
+    fail_reason    TEXT,
+    attempt_count  INTEGER NOT NULL DEFAULT 0,
+    next_retry_at  INTEGER,
+    first_attempt_at INTEGER
+);
+
+CREATE INDEX idx_message_dialog ON message(dialog_id, created_at DESC, local_id DESC);
+CREATE INDEX idx_message_outbox ON message(state, next_retry_at) WHERE state = 'PENDING';
+
+insertPending:
+INSERT INTO message(server_id, client_msg_id, dialog_id, sender_id, text, created_at, state, attempt_count, next_retry_at)
+VALUES (NULL, :clientMsgId, :dialogId, :senderId, :text, :createdAt, 'PENDING', 0, NULL);
+
+insertRemote:
+INSERT OR IGNORE INTO message(server_id, client_msg_id, dialog_id, sender_id, text, created_at, state)
+VALUES (:serverId, NULL, :dialogId, :senderId, :text, :createdAt, 'SENT');
+
+findByClientMsgId:
+SELECT * FROM message WHERE client_msg_id = :clientMsgId;
+
+findByServerId:
+SELECT * FROM message WHERE server_id = :serverId;
+
+findByLocalId:
+SELECT * FROM message WHERE local_id = :localId;
+
+promote:
+UPDATE message
+SET server_id = :serverId, created_at = :createdAt, state = 'SENT', fail_reason = NULL, next_retry_at = NULL
+WHERE local_id = :localId;
+
+promoteKeepingCreatedAt:
+UPDATE message
+SET server_id = :serverId, state = 'SENT', fail_reason = NULL, next_retry_at = NULL
+WHERE local_id = :localId;
+
+markAttempt:
+UPDATE message
+SET attempt_count = attempt_count + 1, next_retry_at = :nextRetryAt, first_attempt_at = COALESCE(first_attempt_at, :now)
+WHERE local_id = :localId;
+
+scheduleRetry:
+UPDATE message
+SET next_retry_at = :nextRetryAt, first_attempt_at = COALESCE(first_attempt_at, :now)
+WHERE local_id = :localId;
+
+markFailed:
+UPDATE message
+SET state = 'FAILED', fail_reason = :failReason, next_retry_at = NULL
+WHERE local_id = :localId;
+
+failByClientMsgId:
+UPDATE message
+SET state = 'FAILED', fail_reason = :failReason, next_retry_at = NULL
+WHERE client_msg_id = :clientMsgId AND state = 'PENDING';
+
+resetForRetry:
+UPDATE message
+SET state = 'PENDING', fail_reason = NULL, attempt_count = 0, next_retry_at = NULL, first_attempt_at = NULL
+WHERE local_id = :localId AND state = 'FAILED';
+
+deleteByLocalId:
+DELETE FROM message WHERE local_id = :localId;
+
+pendingDue:
+SELECT * FROM message
+WHERE state = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= :now)
+ORDER BY created_at ASC, local_id ASC;
+
+selectForDialog:
+SELECT * FROM message
+WHERE dialog_id = :dialogId
+ORDER BY created_at DESC, local_id DESC
+LIMIT :limit;
+
+countForDialog:
+SELECT COUNT(*) FROM message WHERE dialog_id = :dialogId;
+
+countAll:
+SELECT COUNT(*) FROM message;
+
+deleteAll:
+DELETE FROM message;

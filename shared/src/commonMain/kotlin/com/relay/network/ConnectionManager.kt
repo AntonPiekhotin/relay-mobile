@@ -50,12 +50,12 @@ class ConnectionManager(
     private val config: AppConfig,
     private val session: SessionManager,
     private val scope: CoroutineScope
-) {
+) : SocketClient {
     private val mutableState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
-    val state: StateFlow<ConnectionState> = mutableState.asStateFlow()
+    override val state: StateFlow<ConnectionState> = mutableState.asStateFlow()
 
     private val mutableFrames = MutableSharedFlow<InboundFrame>(extraBufferCapacity = FRAME_BUFFER)
-    val frames: SharedFlow<InboundFrame> = mutableFrames.asSharedFlow()
+    override val frames: SharedFlow<InboundFrame> = mutableFrames.asSharedFlow()
 
     private var loopJob: Job? = null
     private var activeSocket: DefaultClientWebSocketSession? = null
@@ -80,7 +80,7 @@ class ConnectionManager(
         mutableState.value = ConnectionState.Disconnected
     }
 
-    suspend fun sendFrame(envelope: Envelope): Boolean {
+    override suspend fun sendFrame(envelope: Envelope): Boolean {
         val socket = activeSocket ?: return false
         return try {
             socket.send(encodeFrame(envelope))
