@@ -26,6 +26,28 @@ WHERE id = :id;
 selectAll:
 SELECT * FROM dialog ORDER BY COALESCE(last_message_at, 0) DESC, id;
 
+selectAllWithPreview:
+SELECT
+    d.id,
+    d.type,
+    d.title,
+    d.last_message_at,
+    d.unread_count,
+    m.text AS last_text,
+    m.state AS last_state,
+    m.sender_id AS last_sender_id
+FROM dialog d
+LEFT JOIN message m ON m.local_id = (
+    SELECT local_id FROM message
+    WHERE dialog_id = d.id
+    ORDER BY created_at DESC, local_id DESC
+    LIMIT 1
+)
+ORDER BY COALESCE(d.last_message_at, 0) DESC, d.id;
+
+selectById:
+SELECT * FROM dialog WHERE id = :id;
+
 selectIds:
 SELECT id FROM dialog;
 

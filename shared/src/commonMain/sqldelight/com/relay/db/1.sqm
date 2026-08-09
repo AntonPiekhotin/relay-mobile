@@ -1,0 +1,10 @@
+CREATE TABLE contact (
+    user_id     TEXT NOT NULL PRIMARY KEY,
+    email       TEXT NOT NULL,
+    first_name  TEXT NOT NULL,
+    last_name   TEXT NOT NULL,
+    avatar_url  TEXT,
+    added_at    INTEGER
+);
+
+CREATE INDEX idx_contact_name ON contact(first_name, last_name, user_id);

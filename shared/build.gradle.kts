@@ -1,5 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val COMPOSE_UI_TEST_SOURCES = "src/uiTest/kotlin"
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidMultiplatformLibrary)
@@ -14,6 +16,8 @@ sqldelight {
         create("RelayDb") {
             packageName.set("com.relay.db")
             dialect("app.cash.sqldelight:sqlite-3-38-dialect:${libs.versions.sqldelight.get()}")
+            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
+            verifyMigrations.set(true)
         }
     }
 }
@@ -72,12 +76,14 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.androidx.navigation.compose)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.client.contentNegotiation)
             implementation(libs.ktor.serialization.json)
             implementation(libs.coroutines.core)
             implementation(libs.serialization.json)
+            implementation(libs.datetime)
             implementation(libs.koin.core)
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
@@ -91,8 +97,21 @@ kotlin {
         getByName("androidHostTest").dependencies {
             implementation(libs.sqldelight.sqlite.driver)
         }
-        iosTest.dependencies {
-            implementation(libs.sqldelight.native.driver)
+        getByName("androidDeviceTest") {
+            kotlin.srcDir(COMPOSE_UI_TEST_SOURCES)
+            dependencies {
+                implementation(libs.compose.uiTest)
+                implementation(libs.androidx.compose.uiTestManifest)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.sqldelight.android.driver)
+            }
+        }
+        iosTest {
+            kotlin.srcDir(COMPOSE_UI_TEST_SOURCES)
+            dependencies {
+                implementation(libs.sqldelight.native.driver)
+                implementation(libs.compose.uiTest)
+            }
         }
     }
 }

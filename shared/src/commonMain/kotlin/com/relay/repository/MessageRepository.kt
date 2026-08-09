@@ -4,6 +4,8 @@ import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
 import com.relay.db.MessageStore
 import com.relay.model.Dialog
+import com.relay.model.DialogSummary
+import com.relay.model.DialogSyncState
 import com.relay.model.Message
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
@@ -15,12 +17,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-private const val HISTORY_PAGE_SIZE = 50
+const val HISTORY_PAGE_SIZE = 50
 
 interface MessageRepository {
     fun observeDialogs(): Flow<List<Dialog>>
-    fun observeMessages(dialogId: String): Flow<List<Message>>
-    suspend fun send(dialogId: String, text: String)
+    fun observeDialogSummaries(): Flow<List<DialogSummary>>
+    fun observeDialog(dialogId: String): Flow<Dialog?>
+    fun observeMessages(dialogId: String, limit: Long): Flow<List<Message>>
+    fun observeSyncState(dialogId: String): Flow<DialogSyncState?>
+    suspend fun storedMessageCount(dialogId: String): Long
+    suspend fun send(dialogId: String, text: String): Boolean
     suspend fun retry(localId: Long)
     suspend fun loadOlder(dialogId: String)
 }
@@ -36,13 +42,22 @@ class MessageRepositoryImpl(
 
     override fun observeDialogs(): Flow<List<Dialog>> = store.observeDialogs()
 
-    override fun observeMessages(dialogId: String): Flow<List<Message>> =
-        store.observeMessages(dialogId)
+    override fun observeDialogSummaries(): Flow<List<DialogSummary>> = store.observeDialogSummaries()
 
-    override suspend fun send(dialogId: String, text: String) {
+    override fun observeDialog(dialogId: String): Flow<Dialog?> = store.observeDialog(dialogId)
+
+    override fun observeMessages(dialogId: String, limit: Long): Flow<List<Message>> =
+        store.observeMessages(dialogId, limit)
+
+    override fun observeSyncState(dialogId: String): Flow<DialogSyncState?> =
+        store.observeSyncState(dialogId)
+
+    override suspend fun storedMessageCount(dialogId: String): Long = store.countMessages(dialogId)
+
+    override suspend fun send(dialogId: String, text: String): Boolean {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return
-        val senderId = (session.state.value as? AuthState.LoggedIn)?.userId ?: return
+        if (trimmed.isEmpty()) return false
+        val senderId = (session.state.value as? AuthState.LoggedIn)?.userId ?: return false
         store.insertPending(
             clientMsgId = newFrameId(),
             dialogId = dialogId,
@@ -51,6 +66,7 @@ class MessageRepositoryImpl(
             createdAt = nowEpochMillis()
         )
         outbox.wake()
+        return true
     }
 
     override suspend fun retry(localId: Long) {

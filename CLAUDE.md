@@ -57,14 +57,26 @@ When a task spans areas, read all matching files. When unsure whether behaviour 
 ## Commands
 
 ```bash
-./gradlew :composeApp:assembleDebug          # Android build
-./gradlew :composeApp:iosSimulatorArm64Test  # iOS unit tests
+./gradlew :androidApp:assembleDebug          # Android build
+./gradlew :shared:iosSimulatorArm64Test      # iOS unit tests
 ./gradlew allTests                           # all common + platform tests
-./gradlew ktlintCheck detekt                 # lint
-./gradlew :composeApp:generateSqlDelightInterface   # after .sq changes
+./gradlew :shared:check                      # tests + schema-migration verification
+./gradlew :shared:generateCommonMainRelayDbInterface   # after .sq changes
+./gradlew :shared:generateCommonMainRelayDbSchema      # after a migration, refresh the snapshot
 ```
 
 iOS app is built from Xcode: open `iosApp/iosApp.xcodeproj`. Gradle builds the shared framework as a build phase.
+
+## Changing the database schema
+
+**Editing a `.sq` table definition is never enough.** The schema version is derived from the number
+of `.sqm` files, so a changed table with no new migration keeps the old version: existing installs
+never upgrade, `create()` is never re-run, and the app crashes on the first query touching the new
+column or table. Two shipped crashes came from exactly this.
+
+Every schema change needs: the `.sq` edit, a new `<n>.sqm` migrating the previous version, and a
+regenerated snapshot in `src/commonMain/sqldelight/databases/`. `verifyMigrations` is on, so
+`./gradlew :shared:check` fails when they disagree — **`allTests` does not run that check.**
 
 ---
 
@@ -74,7 +86,7 @@ Build order — do not skip ahead, each phase depends on the previous:
 
 - [x] **1. Shared core** — protocol models, Ktor WebSocket client, auth, connect to gateway from both platforms
 - [x] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
-- [ ] **3. Compose UI** — dialog list, chat screen, composer
+- [x] **3. Compose UI** — dialog list, chat screen, composer. Also: theme, Navigation Compose, people search/contacts.
 - [ ] **4. Push notifications** — FCM + APNs, native both sides
 - [ ] **5. Presence / typing**
 - [ ] **6. Calls** — shared signaling, native CallKit/ConnectionService

@@ -2,6 +2,8 @@ package com.relay.db
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOneOrNull
+import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
 import com.relay.model.MessageState
 import kotlinx.coroutines.CoroutineDispatcher
@@ -24,11 +26,29 @@ class MessageStore(
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
 
+    fun observeDialogSummaries(): Flow<List<DialogSummary>> =
+        db.dialogQueries.selectAllWithPreview()
+            .asFlow()
+            .mapToList(dispatcher)
+            .map { rows -> rows.map { it.toDomain() } }
+
     fun observeMessages(dialogId: String, limit: Long = DEFAULT_VISIBLE_MESSAGES): Flow<List<DomainMessage>> =
         db.messageQueries.selectForDialog(dialogId, limit)
             .asFlow()
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
+
+    fun observeDialog(dialogId: String): Flow<DomainDialog?> =
+        db.dialogQueries.selectById(dialogId)
+            .asFlow()
+            .mapToOneOrNull(dispatcher)
+            .map { row -> row?.toDomain() }
+
+    fun observeSyncState(dialogId: String): Flow<DialogSyncState?> =
+        db.sync_stateQueries.selectByDialog(dialogId)
+            .asFlow()
+            .mapToOneOrNull(dispatcher)
+            .map { row -> row?.toDomain() }
 
     suspend fun insertPending(
         clientMsgId: String,
@@ -136,14 +156,7 @@ class MessageStore(
     }
 
     suspend fun syncState(dialogId: String): DialogSyncState? = withContext(dispatcher) {
-        db.sync_stateQueries.selectByDialog(dialogId).executeAsOneOrNull()?.let {
-            DialogSyncState(
-                dialogId = it.dialog_id,
-                newestSyncedId = it.newest_synced_id,
-                oldestLoadedId = it.oldest_loaded_id,
-                hasMoreHistory = it.has_more_history != 0L
-            )
-        }
+        db.sync_stateQueries.selectByDialog(dialogId).executeAsOneOrNull()?.toDomain()
     }
 
     suspend fun ensureSyncState(dialogId: String): Unit = withContext(dispatcher) {
@@ -191,6 +204,26 @@ private fun Message.toDomain(): DomainMessage =
         attemptCount = attempt_count,
         nextRetryAt = next_retry_at,
         firstAttemptAt = first_attempt_at
+    )
+
+private fun Sync_state.toDomain(): DialogSyncState =
+    DialogSyncState(
+        dialogId = dialog_id,
+        newestSyncedId = newest_synced_id,
+        oldestLoadedId = oldest_loaded_id,
+        hasMoreHistory = has_more_history != 0L
+    )
+
+private fun SelectAllWithPreview.toDomain(): DialogSummary =
+    DialogSummary(
+        id = id,
+        type = type,
+        title = title,
+        lastMessageAt = last_message_at,
+        unreadCount = unread_count,
+        lastMessageText = last_text,
+        lastMessageState = last_state?.let { MessageState.valueOf(it) },
+        lastMessageSenderId = last_sender_id
     )
 
 private fun Dialog.toDomain(): DomainDialog =

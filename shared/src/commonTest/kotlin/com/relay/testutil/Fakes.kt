@@ -48,6 +48,10 @@ class FakeSocket : SocketClient {
         mutableState.value = ConnectionState.Disconnected
     }
 
+    fun connecting() {
+        mutableState.value = ConnectionState.Connecting
+    }
+
     suspend fun emitFrame(frame: InboundFrame) {
         mutableFrames.emit(frame)
     }

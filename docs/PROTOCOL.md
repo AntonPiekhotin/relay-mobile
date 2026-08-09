@@ -316,7 +316,8 @@ direct path cannot be found, and never through any service, queue, or database. 
 > here so clients can be written against it and so the eventual implementation has one shape to
 > hit. Everything below is normative-when-built.
 >
-> **The call endpoints are the exception — those exist.**
+> **The call, profile, and contact endpoints are the exception — those exist.** §5.0 and §5.3
+> describe running code, not a target.
 
 All routed through the api-gateway as `/api/v1/{service}/**` — the same convention every existing
 service already follows — and all requiring `Authorization: Bearer`. The planned message endpoints
@@ -332,6 +333,16 @@ therefore live under `/api/v1/message/**`.
 | `POST` | `/api/v1/message/messages` | REST fallback send | Internal only today |
 | `GET` | `/api/v1/call/ice-servers` | STUN/TURN servers with short-lived credentials | **Implemented** |
 | `GET` | `/api/v1/call/calls?before=<callId>&limit=50` | Call log, newest-first | **Implemented** |
+| `GET` | `/api/v1/user/me` | The caller's own profile | **Implemented** |
+| `PUT` | `/api/v1/user/me` | Replace the caller's first and last name | **Implemented** |
+| `GET` | `/api/v1/user/search?query=<term>&page=0&size=20` | Find people, with a contact flag per hit | **Implemented** |
+| `GET` | `/api/v1/user/{id}` | Another user's public subset | **Implemented** |
+| `POST` | `/api/v1/user/me/avatar` | Upload a profile picture (multipart) | **Implemented** |
+| `DELETE` | `/api/v1/user/me/avatar` | Clear it | **Implemented** |
+| `GET` | `/api/v1/user/{id}/avatar` | Fetch the stored bytes | **Implemented** |
+| `GET` | `/api/v1/user/me/contacts?page=0&size=20` | The caller's contacts, sorted by name | **Implemented** |
+| `POST` | `/api/v1/user/me/contacts` | Add a contact | **Implemented** |
+| `DELETE` | `/api/v1/user/me/contacts/{userId}` | Remove one | **Implemented** |
 | `PUT` | `/api/v1/notification/device-tokens` | Register this device for push | **Implemented** |
 | `DELETE` | `/api/v1/notification/device-tokens/{deviceId}` | Unregister it | **Implemented** |
 
@@ -421,6 +432,135 @@ POST /api/v1/message/messages
 Same semantics as the socket path — same `client_msg_id`, same idempotency, same convergence on
 the one persistence path. Use when the socket is not connected (cold start, mid-reconnect,
 backgrounded).
+
+### 5.3 Profile and contact endpoints
+
+**These are implemented and routed today.** They are the only client-facing surface for finding
+another person. Note what is *not* here: **there is no client-facing way to create a dialog.**
+message-service's `POST /internal/api/v1/dialogs` is `/internal`, so a client can find a user and
+add them as a contact but cannot open a conversation with them. Until dialog creation is routed, a
+"message this person" affordance has nothing to call — do not build one that pretends otherwise.
+
+Every endpoint below requires `Authorization: Bearer`. **Bodies are camelCase**, like the other
+implemented REST surfaces and unlike the snake_case frames of §3–§4. Every "my" endpoint resolves
+the subject from the JWT, never from the path, so there is no endpoint that reads or edits somebody
+else's profile or address book.
+
+#### Paging
+
+`page` and `size` are query parameters on both `search` and `contacts`, defaulting to `0` and `20`.
+**Out-of-range values are clamped, not rejected** — `size=10000` yields the 100-row maximum and
+`page=-1` yields page 0, so a client never gets a `400` for asking too much. Every paged response
+shares one envelope:
+
+```
+{ "items": [ … ], "page": 0, "size": 20,
+  "totalElements": 42, "totalPages": 3, "hasNext": true }
+```
+
+Page through with `hasNext`, not by comparing `page` against `totalPages`.
+
+> This is **offset paging, and it is the exception to §5.1's rule.** Users are not inserted at the
+> head the way messages are, so the drift that makes offsets unusable for history does not apply.
+> Do not copy this shape into the message endpoints.
+
+#### `GET /api/v1/user/me` · `PUT /api/v1/user/me`
+
+```
+200 → {
+  "id": "...", "email": "ada@relay.dev",
+  "firstName": "Ada", "lastName": "Lovelace",
+  "avatarUrl": "/api/v1/user/<id>/avatar?v=1785600000000",
+  "createdAt": "2026-07-26T10:00:00Z", "updatedAt": "2026-07-26T10:00:00Z"
+}
+```
+
+`PUT` takes `{ "firstName": "...", "lastName": "..." }` and returns the same shape. It is a genuine
+`PUT`: **both fields are required and replace the pair wholesale**, so a client sending back a stale
+value overwrites a change another of its devices made. Names are trimmed server-side; blank ones are
+rejected with `400`.
+
+The body is deliberately narrower than what `GET` returns. `email` is the Keycloak username and
+cannot be changed here; the password lives in Keycloak and is changed via
+`POST /api/v1/auth/password`; `avatarUrl` is set by uploading a picture, never by naming a URL.
+
+#### `GET /api/v1/user/search?query=<term>&page=0&size=20`
+
+```
+200 → { "items": [
+  { "user": { "id": "...", "email": "ada@relay.dev",
+              "firstName": "Ada", "lastName": "Lovelace", "avatarUrl": null },
+    "contact": true }
+], "page": 0, "size": 20, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+- **A term shorter than 2 characters is a `400`**, not an empty page. Do not issue the request;
+  debounce and gate on length client-side.
+- **Names match by prefix; email matches only exactly.** A prefix match on email would turn this
+  into an address harvester, so searching `"a"` will never enumerate accounts.
+- **The caller is excluded from their own results** — you cannot add yourself.
+- `contact` says whether this person is already in the caller's contacts, so a list can render
+  "Add" or "Remove" without a round trip per row. Note the JSON key is `contact`, not `isContact`.
+- Results are ordered by first name, last name, then `id`. The `id` tiebreaker is what keeps paging
+  deterministic when names collide.
+
+#### `GET /api/v1/user/{id}`
+
+Returns the `user` object above — the public subset only, so a lookup by id cannot mine `createdAt`
+or anything else private. `404` if no such user.
+
+#### Contacts
+
+```
+GET  /api/v1/user/me/contacts?page=0&size=20
+200 → { "items": [ { "user": { … }, "addedAt": "2026-07-26T10:00:00Z" } ], … }
+
+POST /api/v1/user/me/contacts     { "userId": "..." }
+201 → { "user": { … }, "addedAt": "..." }      first time
+200 → { "user": { … }, "addedAt": "..." }      already a contact
+
+DELETE /api/v1/user/me/contacts/{userId}
+204
+```
+
+- **Contacts are one-sided.** Adding somebody does not add you to theirs, and there is no request or
+  approval step.
+- **Both writes are idempotent.** Re-adding returns the same contact with `200` instead of `201`;
+  removing somebody you never had is still `204`. A retry is not an error — treat the status code as
+  information, not as a failure to handle.
+- Adding yourself is `400`; adding a nonexistent user is `404`.
+- The list is sorted **by name, like an address book — not by when each was added**.
+
+#### Avatars
+
+`POST /api/v1/user/me/avatar` is `multipart/form-data` with a `file` part, at most **1 MB**, and
+returns `{ "avatarUrl", "contentType", "sizeBytes", "updatedAt" }`.
+
+**The content type is detected from the file's own bytes, never from the part's `Content-Type`.**
+Only `image/png`, `image/jpeg`, `image/webp`, and `image/gif` are stored; anything else is `415`,
+and an oversized upload is `413`.
+
+`avatarUrl` is **relative on purpose** — the host depends on which edge the client came through, so
+resolve it against your configured API base URL. The `v` stamp changes whenever the picture does,
+which is what makes the aggressive cache headers on `GET /{id}/avatar` safe. `DELETE` clears the
+picture and is idempotent. A user with no picture has `avatarUrl: null` and `GET /{id}/avatar`
+returns `404`.
+
+#### Error shape
+
+Failures on these endpoints do **not** use the `code`/`message` shape of §8 — that is the frame
+vocabulary. REST errors come back as:
+
+```
+{ "time": "2026-07-26 10:00:00", "statusCode": 400,
+  "errorMessage": ["Search query must be at least 2 characters"] }
+```
+
+`errorMessage` is always an array; validation failures put one entry per rejected field, formatted
+`field: reason`. Match on the HTTP status, not on the message text.
+
+Some responses also carry a `stackTrace` array. **Ignore it and do not show it** — and make sure
+your deserializer tolerates unknown fields, because a strict parser will choke on it.
 
 ---
 

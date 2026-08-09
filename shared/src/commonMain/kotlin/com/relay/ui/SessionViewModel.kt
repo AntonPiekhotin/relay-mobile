@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.relay.auth.AuthResult
 import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
+import com.relay.db.ContactStore
 import com.relay.db.MessageStore
 import com.relay.network.ConnectionManager
 import com.relay.network.ConnectionState
@@ -20,7 +21,8 @@ class SessionViewModel(
     private val connection: ConnectionManager,
     private val syncEngine: SyncEngine,
     private val outbox: Outbox,
-    private val store: MessageStore
+    private val store: MessageStore,
+    private val contacts: ContactStore
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = session.state
@@ -47,6 +49,7 @@ class SessionViewModel(
                         outbox.stop()
                         syncEngine.stop()
                         store.clearAll()
+                        contacts.clearAll()
                     }
                     is AuthState.Unknown -> Unit
                 }

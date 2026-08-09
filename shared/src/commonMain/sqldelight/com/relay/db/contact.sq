@@ -1,0 +1,29 @@
+CREATE TABLE contact (
+    user_id     TEXT NOT NULL PRIMARY KEY,
+    email       TEXT NOT NULL,
+    first_name  TEXT NOT NULL,
+    last_name   TEXT NOT NULL,
+    avatar_url  TEXT,
+    added_at    INTEGER
+);
+
+CREATE INDEX idx_contact_name ON contact(first_name, last_name, user_id);
+
+selectAll:
+SELECT * FROM contact ORDER BY first_name, last_name, user_id;
+
+upsert:
+INSERT INTO contact(user_id, email, first_name, last_name, avatar_url, added_at)
+VALUES (:userId, :email, :firstName, :lastName, :avatarUrl, :addedAt)
+ON CONFLICT(user_id) DO UPDATE SET
+    email = excluded.email,
+    first_name = excluded.first_name,
+    last_name = excluded.last_name,
+    avatar_url = excluded.avatar_url,
+    added_at = COALESCE(excluded.added_at, contact.added_at);
+
+deleteByUserId:
+DELETE FROM contact WHERE user_id = :userId;
+
+deleteAll:
+DELETE FROM contact;

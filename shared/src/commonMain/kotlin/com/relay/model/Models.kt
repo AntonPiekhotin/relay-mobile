@@ -25,6 +25,17 @@ data class Dialog(
     val unreadCount: Long
 )
 
+data class DialogSummary(
+    val id: String,
+    val type: String,
+    val title: String?,
+    val lastMessageAt: Long?,
+    val unreadCount: Long,
+    val lastMessageText: String?,
+    val lastMessageState: MessageState?,
+    val lastMessageSenderId: String?
+)
+
 data class DialogSyncState(
     val dialogId: String,
     val newestSyncedId: String?,
