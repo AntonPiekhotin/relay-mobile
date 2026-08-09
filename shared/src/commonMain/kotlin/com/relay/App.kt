@@ -1,47 +1,47 @@
 package com.relay
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeContentPadding
-import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import org.jetbrains.compose.resources.painterResource
-
-import relay_mobile.shared.generated.resources.Res
-import relay_mobile.shared.generated.resources.compose_multiplatform
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.relay.auth.AuthState
+import com.relay.ui.HomeScreen
+import com.relay.ui.LoginScreen
+import com.relay.ui.SessionViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-@Preview
 fun App() {
     MaterialTheme {
-        var showContent by remember { mutableStateOf(false) }
-        Column(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .safeContentPadding()
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Button(onClick = { showContent = !showContent }) {
-                Text("Click me!")
-            }
-            AnimatedVisibility(showContent) {
-                val greeting = remember { Greeting().greet() }
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Image(painterResource(Res.drawable.compose_multiplatform), null)
-                    Text("Compose: $greeting")
+        Surface(modifier = Modifier.fillMaxSize()) {
+            val viewModel = koinViewModel<SessionViewModel>()
+            val authState by viewModel.authState.collectAsStateWithLifecycle()
+            val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
+            val busy by viewModel.busy.collectAsStateWithLifecycle()
+            val error by viewModel.error.collectAsStateWithLifecycle()
+
+            Box(modifier = Modifier.fillMaxSize().safeContentPadding()) {
+                when (authState) {
+                    is AuthState.Unknown -> CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    is AuthState.LoggedOut -> LoginScreen(
+                        busy = busy,
+                        error = error,
+                        onLogin = viewModel::login,
+                        onRegister = viewModel::register
+                    )
+                    is AuthState.LoggedIn -> HomeScreen(
+                        connectionState = connectionState,
+                        onLogout = viewModel::logout
+                    )
                 }
             }
         }

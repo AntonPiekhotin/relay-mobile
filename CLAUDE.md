@@ -72,7 +72,7 @@ iOS app is built from Xcode: open `iosApp/iosApp.xcodeproj`. Gradle builds the s
 
 Build order — do not skip ahead, each phase depends on the previous:
 
-- [ ] **1. Shared core** — protocol models, Ktor WebSocket client, auth, connect to gateway from both platforms
+- [x] **1. Shared core** — protocol models, Ktor WebSocket client, auth, connect to gateway from both platforms
 - [ ] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
 - [ ] **3. Compose UI** — dialog list, chat screen, composer
 - [ ] **4. Push notifications** — FCM + APNs, native both sides
