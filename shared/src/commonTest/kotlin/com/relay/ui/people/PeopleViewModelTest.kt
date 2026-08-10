@@ -1,7 +1,10 @@
 package com.relay.ui.people
 
+import app.cash.turbine.test
 import com.relay.model.SearchPage
+import com.relay.repository.OpenDialogResult
 import com.relay.repository.UserResult
+import com.relay.testutil.FakeMessageRepository
 import com.relay.testutil.FakeUserRepository
 import com.relay.testutil.contact
 import com.relay.testutil.searchResult
@@ -41,8 +44,9 @@ class PeopleViewModelTest {
     @Test
     fun contactsComeFromTheObservedStore() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.setContacts(listOf(contact("a"), contact("b")))
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         assertEquals(listOf("a", "b"), viewModel.state.value.contacts.map { it.id })
@@ -53,7 +57,8 @@ class PeopleViewModelTest {
     @Test
     fun aQueryShorterThanTheMinimumNeverReachesTheServer() = runTest {
         val users = FakeUserRepository()
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val messages = FakeMessageRepository()
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         viewModel.onQueryChange("a")
@@ -67,10 +72,11 @@ class PeopleViewModelTest {
     @Test
     fun typingIsDebouncedIntoASingleSearch() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.searchHandler = { query, _ ->
             UserResult.Success(SearchPage(listOf(searchResult("z")), page = 0, hasNext = false))
         }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         viewModel.onQueryChange("an")
@@ -89,11 +95,12 @@ class PeopleViewModelTest {
     @Test
     fun searchResultsAreMarkedAsContactsWhenTheyAreAlreadyStored() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.setContacts(listOf(contact("z")))
         users.searchHandler = { _, _ ->
             UserResult.Success(SearchPage(listOf(searchResult("z"), searchResult("y")), 0, false))
         }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         viewModel.onQueryChange("zz")
@@ -106,10 +113,11 @@ class PeopleViewModelTest {
     @Test
     fun addingAContactMarksItPendingThenSurfacesItInContacts() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.searchHandler = { _, _ ->
             UserResult.Success(SearchPage(listOf(searchResult("y")), 0, false))
         }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
         viewModel.onQueryChange("yy")
         advanceUntilIdle()
@@ -126,11 +134,12 @@ class PeopleViewModelTest {
     @Test
     fun removingFromTheSearchTabFlipsTheRowBackToAdd() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.setContacts(listOf(contact("z")))
         users.searchHandler = { _, _ ->
             UserResult.Success(SearchPage(listOf(searchResult("z", isContact = true)), 0, false))
         }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
         viewModel.onQueryChange("zz")
         advanceUntilIdle()
@@ -146,8 +155,9 @@ class PeopleViewModelTest {
     @Test
     fun removingAContactDropsItFromTheList() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.setContacts(listOf(contact("a")))
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         viewModel.removeContact("a")
@@ -159,8 +169,9 @@ class PeopleViewModelTest {
     @Test
     fun aFailedSearchIsSurfacedAsAnError() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.searchHandler = { _, _ -> UserResult.Failure("Cannot reach the server") }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
         viewModel.onQueryChange("anna")
@@ -173,11 +184,12 @@ class PeopleViewModelTest {
     @Test
     fun aFailedAddIsSurfacedAndLeavesContactsUnchanged() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.searchHandler = { _, _ ->
             UserResult.Success(SearchPage(listOf(searchResult("y")), 0, false))
         }
         users.addHandler = { UserResult.Failure("Not permitted") }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
         viewModel.onQueryChange("yy")
         advanceUntilIdle()
@@ -190,10 +202,61 @@ class PeopleViewModelTest {
     }
 
     @Test
+    fun openingAChatEmitsTheDialogIdToNavigateTo() = runTest {
+        val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
+        messages.openHandler = { OpenDialogResult.Opened("dialog-7") }
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
+        advanceUntilIdle()
+
+        viewModel.openedDialog.test {
+            viewModel.openChat("peer-1")
+            advanceUntilIdle()
+            assertEquals("dialog-7", awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(listOf("peer-1"), messages.openedPeers)
+        assertFalse("peer-1" in viewModel.state.value.pendingIds)
+    }
+
+    @Test
+    fun aFailedOpenIsSurfacedAndNavigatesNowhere() = runTest {
+        val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
+        messages.openHandler = { OpenDialogResult.Failed("Cannot reach the server") }
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
+        advanceUntilIdle()
+
+        viewModel.openedDialog.test {
+            viewModel.openChat("peer-1")
+            advanceUntilIdle()
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals("Cannot reach the server", viewModel.state.value.error)
+        assertFalse("peer-1" in viewModel.state.value.pendingIds)
+    }
+
+    @Test
+    fun tappingMessageTwiceOpensOnlyOneDialog() = runTest {
+        val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
+        advanceUntilIdle()
+
+        viewModel.openChat("peer-1")
+        viewModel.openChat("peer-1")
+        advanceUntilIdle()
+
+        assertEquals(listOf("peer-1"), messages.openedPeers)
+    }
+
+    @Test
     fun switchingTabsClearsTheVisibleError() = runTest {
         val users = FakeUserRepository()
+        val messages = FakeMessageRepository()
         users.refreshHandler = { UserResult.Failure("Cannot reach the server") }
-        val viewModel = PeopleViewModel(users, TEST_DEBOUNCE)
+        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
         assertEquals("Cannot reach the server", viewModel.state.value.error)
 

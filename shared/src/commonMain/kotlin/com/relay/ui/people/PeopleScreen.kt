@@ -36,6 +36,7 @@ fun PeopleScreen(
     state: PeopleState,
     onTabChange: (PeopleTab) -> Unit,
     onQueryChange: (String) -> Unit,
+    onOpenChat: (String) -> Unit,
     onAddContact: (String) -> Unit,
     onRemoveContact: (String) -> Unit,
     onBack: () -> Unit,
@@ -75,8 +76,8 @@ fun PeopleScreen(
                 )
             }
             when (state.tab) {
-                PeopleTab.CONTACTS -> ContactsTab(state, onAddContact, onRemoveContact)
-                PeopleTab.SEARCH -> SearchTab(state, onQueryChange, onAddContact, onRemoveContact)
+                PeopleTab.CONTACTS -> ContactsTab(state, onOpenChat, onAddContact, onRemoveContact)
+                PeopleTab.SEARCH -> SearchTab(state, onQueryChange, onOpenChat, onAddContact, onRemoveContact)
             }
         }
     }
@@ -85,6 +86,7 @@ fun PeopleScreen(
 @Composable
 private fun ContactsTab(
     state: PeopleState,
+    onOpenChat: (String) -> Unit,
     onAddContact: (String) -> Unit,
     onRemoveContact: (String) -> Unit
 ) {
@@ -94,7 +96,7 @@ private fun ContactsTab(
             detail = "Find people on the Search tab and add them here."
         )
     } else {
-        PeopleList(state.contacts, state, onAddContact, onRemoveContact)
+        PeopleList(state.contacts, state, onOpenChat, onAddContact, onRemoveContact)
     }
 }
 
@@ -102,6 +104,7 @@ private fun ContactsTab(
 private fun SearchTab(
     state: PeopleState,
     onQueryChange: (String) -> Unit,
+    onOpenChat: (String) -> Unit,
     onAddContact: (String) -> Unit,
     onRemoveContact: (String) -> Unit
 ) {
@@ -125,7 +128,7 @@ private fun SearchTab(
                 title = "Nobody found",
                 detail = "No account matches “${state.query.trim()}”."
             )
-            else -> PeopleList(state.results, state, onAddContact, onRemoveContact)
+            else -> PeopleList(state.results, state, onOpenChat, onAddContact, onRemoveContact)
         }
     }
 }
@@ -134,6 +137,7 @@ private fun SearchTab(
 private fun PeopleList(
     people: List<PersonUi>,
     state: PeopleState,
+    onOpenChat: (String) -> Unit,
     onAddContact: (String) -> Unit,
     onRemoveContact: (String) -> Unit
 ) {
@@ -142,19 +146,11 @@ private fun PeopleList(
             PersonRow(
                 person = person,
                 busy = person.id in state.pendingIds,
+                onOpenChat = onOpenChat,
                 onAddContact = onAddContact,
                 onRemoveContact = onRemoveContact
             )
             HorizontalDivider()
-        }
-        item {
-            Text(
-                text = "Starting a conversation is not possible yet — the backend exposes dialog " +
-                    "creation only on its internal API, which the gateway does not route.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp)
-            )
         }
     }
 }

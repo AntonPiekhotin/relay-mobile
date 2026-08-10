@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.network.MIN_SEARCH_LENGTH
+import com.relay.repository.MessageRepository
+import com.relay.repository.OpenDialogResult
 import com.relay.repository.UserRepository
 import com.relay.repository.UserResult
 import com.relay.ui.state.PeopleState
@@ -14,10 +16,13 @@ import com.relay.ui.state.toPersonUi
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,11 +30,15 @@ val SEARCH_DEBOUNCE: Duration = 300.milliseconds
 
 class PeopleViewModel(
     private val users: UserRepository,
+    private val messages: MessageRepository,
     private val debounce: Duration = SEARCH_DEBOUNCE
 ) : ViewModel() {
 
     private val mutableState = MutableStateFlow(PeopleState())
     val state: StateFlow<PeopleState> = mutableState.asStateFlow()
+
+    private val openedDialogs = Channel<String>(Channel.BUFFERED)
+    val openedDialog: Flow<String> = openedDialogs.receiveAsFlow()
 
     private var searchJob: Job? = null
     private var contactIds: Set<String> = emptySet()
@@ -88,6 +97,22 @@ class PeopleViewModel(
 
     fun removeContact(userId: String) {
         mutate(userId) { users.removeContact(userId) }
+    }
+
+    fun openChat(userId: String) {
+        if (userId in mutableState.value.pendingIds) return
+        mutableState.update { it.copy(pendingIds = it.pendingIds + userId, error = null) }
+        viewModelScope.launch {
+            when (val result = messages.openDirectDialog(userId)) {
+                is OpenDialogResult.Opened -> {
+                    mutableState.update { it.copy(pendingIds = it.pendingIds - userId) }
+                    openedDialogs.send(result.dialogId)
+                }
+                is OpenDialogResult.Failed -> mutableState.update {
+                    it.copy(pendingIds = it.pendingIds - userId, error = result.message)
+                }
+            }
+        }
     }
 
     private fun mutate(userId: String, action: suspend () -> UserResult<Unit>) {

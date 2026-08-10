@@ -54,7 +54,7 @@ val commonModule = module {
     factory { SessionViewModel(get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
     factory { (dialogId: String) -> ChatViewModel(dialogId, get(), get(), get()) }
-    factory { PeopleViewModel(get()) }
+    factory { PeopleViewModel(get(), get()) }
 }
 
 expect val platformModule: Module

@@ -21,6 +21,7 @@ import com.relay.ui.state.PersonUi
 fun PersonRow(
     person: PersonUi,
     busy: Boolean,
+    onOpenChat: (String) -> Unit,
     onAddContact: (String) -> Unit,
     onRemoveContact: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -48,10 +49,13 @@ fun PersonRow(
         }
         if (busy) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp))
-        } else if (person.isContact) {
-            TextButton(onClick = { onRemoveContact(person.id) }) { Text("Remove") }
         } else {
-            TextButton(onClick = { onAddContact(person.id) }) { Text("Add") }
+            TextButton(onClick = { onOpenChat(person.id) }) { Text("Message") }
+            if (person.isContact) {
+                TextButton(onClick = { onRemoveContact(person.id) }) { Text("Remove") }
+            } else {
+                TextButton(onClick = { onAddContact(person.id) }) { Text("Add") }
+            }
         }
     }
 }

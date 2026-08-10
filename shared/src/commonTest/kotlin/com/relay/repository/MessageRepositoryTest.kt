@@ -7,6 +7,7 @@ import com.relay.network.AuthApi
 import com.relay.network.AuthApiResult
 import com.relay.network.LoginRequest
 import com.relay.network.MessageApiResult
+import com.relay.network.OpenedDialogResponse
 import com.relay.network.RegisterRequest
 import com.relay.network.TokenResponse
 import com.relay.sync.Outbox
@@ -19,6 +20,7 @@ import com.relay.testutil.testJwt
 import com.relay.testutil.wireMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -115,6 +117,43 @@ class MessageRepositoryTest {
         assertEquals(original.clientMsgId, retried.clientMsgId)
         assertEquals(MessageState.PENDING, retried.state)
         assertEquals(0L, retried.attemptCount)
+    }
+
+    @Test
+    fun openingADialogStoresItLocallySoItSurvivesWithoutADialogListEndpoint() = runTest {
+        val harness = RepoHarness(this)
+        harness.logIn()
+        harness.api.openDialogHandler = {
+            MessageApiResult.Success(
+                OpenedDialogResponse(
+                    id = "167f2922-36d9-4bc4-8cfe-0946601752ab",
+                    type = "direct",
+                    participantIds = listOf("user-1", "peer-9"),
+                    createdAt = "2026-08-09T20:54:57.327612Z"
+                )
+            )
+        }
+
+        val result = harness.repository.openDirectDialog("peer-9")
+
+        assertIs<OpenDialogResult.Opened>(result)
+        assertEquals("167f2922-36d9-4bc4-8cfe-0946601752ab", result.dialogId)
+        val stored = harness.store.observeDialogs().first().single()
+        assertEquals("167f2922-36d9-4bc4-8cfe-0946601752ab", stored.id)
+        assertEquals("direct", stored.type)
+        assertEquals(1_786_308_897_327L, stored.lastMessageAt)
+    }
+
+    @Test
+    fun aRefusedOpenIsReportedAndStoresNothing() = runTest {
+        val harness = RepoHarness(this)
+        harness.logIn()
+        harness.api.openDialogHandler = { MessageApiResult.Rejected(400) }
+
+        val result = harness.repository.openDirectDialog("myself")
+
+        assertIs<OpenDialogResult.Failed>(result)
+        assertEquals(0, harness.store.observeDialogs().first().size)
     }
 
     @Test

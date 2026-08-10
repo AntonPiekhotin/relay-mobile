@@ -50,8 +50,7 @@ fun DialogListScreen(
                 }
                 state.isLoaded -> EmptyState(
                     title = "No conversations",
-                    detail = "Conversations appear here once a dialog exists on the server. " +
-                        "The backend does not yet expose dialog creation to clients."
+                    detail = "Open People, find someone, and tap Message to start one."
                 )
                 else -> Unit
             }

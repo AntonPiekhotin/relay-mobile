@@ -9,6 +9,7 @@ import com.relay.model.DialogSyncState
 import com.relay.model.Message
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
+import com.relay.protocol.isoToEpochMillisOrNull
 import com.relay.protocol.newFrameId
 import com.relay.protocol.nowEpochMillis
 import com.relay.sync.Outbox
@@ -19,7 +20,13 @@ import kotlinx.coroutines.sync.withLock
 
 const val HISTORY_PAGE_SIZE = 50
 
+sealed interface OpenDialogResult {
+    data class Opened(val dialogId: String) : OpenDialogResult
+    data class Failed(val message: String) : OpenDialogResult
+}
+
 interface MessageRepository {
+    suspend fun openDirectDialog(peerId: String): OpenDialogResult
     fun observeDialogs(): Flow<List<Dialog>>
     fun observeDialogSummaries(): Flow<List<DialogSummary>>
     fun observeDialog(dialogId: String): Flow<Dialog?>
@@ -39,6 +46,24 @@ class MessageRepositoryImpl(
 ) : MessageRepository {
     private val loadOlderGuard = Mutex()
     private val loadingOlder = mutableSetOf<String>()
+
+    override suspend fun openDirectDialog(peerId: String): OpenDialogResult =
+        when (val result = api.openDirectDialog(peerId)) {
+            is MessageApiResult.Success -> {
+                val opened = result.value
+                store.upsertDialog(
+                    id = opened.id,
+                    type = opened.type,
+                    title = null,
+                    lastMessageAt = opened.createdAt?.let { isoToEpochMillisOrNull(it) }
+                )
+                OpenDialogResult.Opened(opened.id)
+            }
+            is MessageApiResult.Unavailable -> OpenDialogResult.Failed(result.reason)
+            is MessageApiResult.Rejected -> OpenDialogResult.Failed(
+                "The server refused to open that conversation (HTTP ${result.status})"
+            )
+        }
 
     override fun observeDialogs(): Flow<List<Dialog>> = store.observeDialogs()
 

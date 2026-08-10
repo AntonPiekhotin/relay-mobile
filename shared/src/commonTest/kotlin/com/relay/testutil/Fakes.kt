@@ -8,6 +8,7 @@ import com.relay.network.ConnectionState
 import com.relay.network.FallbackSendResponse
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
+import com.relay.network.OpenedDialogResponse
 import com.relay.network.SocketClient
 import com.relay.network.WireDialog
 import com.relay.network.WireMessage
@@ -67,10 +68,21 @@ class FakeMessageApi : MessageApi {
     var fallbackHandler: suspend (String, String, String) -> MessageApiResult<FallbackSendResponse> =
         { _, _, _ -> MessageApiResult.Unavailable("rest not reachable") }
 
+    var openDialogHandler: suspend (String) -> MessageApiResult<OpenedDialogResponse> =
+        { peerId -> MessageApiResult.Success(OpenedDialogResponse("dialog-for-$peerId", "direct", listOf(peerId), TEST_ISO)) }
+
+    var openDialogCalls = 0
+    var openDialogPeers = mutableListOf<String>()
     var dialogsCalls = 0
     var afterCalls = 0
     var beforeCalls = 0
     var fallbackCalls = 0
+
+    override suspend fun openDirectDialog(peerId: String): MessageApiResult<OpenedDialogResponse> {
+        openDialogCalls++
+        openDialogPeers += peerId
+        return openDialogHandler(peerId)
+    }
 
     override suspend fun dialogs(): MessageApiResult<List<WireDialog>> {
         dialogsCalls++

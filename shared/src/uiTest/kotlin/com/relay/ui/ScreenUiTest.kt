@@ -120,6 +120,7 @@ class ScreenUiTest {
                     state = PeopleState(tab = PeopleTab.SEARCH, query = "a"),
                     onTabChange = {},
                     onQueryChange = {},
+                    onOpenChat = {},
                     onAddContact = {},
                     onRemoveContact = {},
                     onBack = {}
@@ -145,6 +146,7 @@ class ScreenUiTest {
                     ),
                     onTabChange = {},
                     onQueryChange = {},
+                    onOpenChat = {},
                     onAddContact = { added += it },
                     onRemoveContact = { removed += it },
                     onBack = {}
@@ -210,6 +212,7 @@ class ScreenUiTest {
                     state = PeopleState(tab = PeopleTab.CONTACTS),
                     onTabChange = {},
                     onQueryChange = {},
+                    onOpenChat = {},
                     onAddContact = {},
                     onRemoveContact = {},
                     onBack = {}

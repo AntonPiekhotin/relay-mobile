@@ -301,11 +301,13 @@ direct path cannot be found, and never through any service, queue, or database. 
 
 > ### ⚠ None of this exists yet
 >
-> **There is no client-facing message or dialog REST API.** message-service exposes only
-> `POST /internal/api/v1/messages` and `POST /internal/api/v1/dialogs`, both under `/internal`,
-> which the api-gateway deliberately does not route — they are reachable service-to-service and
-> nowhere else. No history endpoint, no dialog list, no cursor pagination, no REST fallback send
-> is implemented on any service.
+> **There is no client-facing message history API.** The gateway now routes `/api/v1/message/**`,
+> and exactly one client-facing endpoint lives behind it: `POST /api/v1/message/dialogs` (§5.4),
+> which opens the direct dialog with another user. That endpoint is what makes a conversation
+> reachable at all — before it, a client could find a person but never obtain a dialog id.
+>
+> Everything else is still missing: no history endpoint, no dialog list, no cursor pagination, and
+> no REST fallback send. `POST /internal/api/v1/messages` remains `/internal`-only.
 >
 > **This is the largest gap between this document and the running system, and it is load-bearing.**
 > The architecture permits delivery to be lossy *because* the client can fetch the gap over REST
@@ -316,8 +318,8 @@ direct path cannot be found, and never through any service, queue, or database. 
 > here so clients can be written against it and so the eventual implementation has one shape to
 > hit. Everything below is normative-when-built.
 >
-> **The call, profile, and contact endpoints are the exception — those exist.** §5.0 and §5.3
-> describe running code, not a target.
+> **The call, profile, contact, and open-dialog endpoints are the exception — those exist.**
+> §5.0, §5.3 and §5.4 describe running code, not a target.
 
 All routed through the api-gateway as `/api/v1/{service}/**` — the same convention every existing
 service already follows — and all requiring `Authorization: Bearer`. The planned message endpoints
@@ -329,7 +331,7 @@ therefore live under `/api/v1/message/**`.
 | `GET` | `/api/v1/message/dialogs/{id}` | Dialog metadata and participants | Planned |
 | `GET` | `/api/v1/message/dialogs/{id}/messages?before=<cursor>&limit=50` | History, newest-first | Planned |
 | `GET` | `/api/v1/message/dialogs/{id}/messages?after=<cursor>&limit=100` | Catch-up after reconnect | Planned |
-| `POST` | `/api/v1/message/dialogs` | Create a dialog | Internal only today |
+| `POST` | `/api/v1/message/dialogs` | Open the direct dialog with one other user | **Implemented** |
 | `POST` | `/api/v1/message/messages` | REST fallback send | Internal only today |
 | `GET` | `/api/v1/call/ice-servers` | STUN/TURN servers with short-lived credentials | **Implemented** |
 | `GET` | `/api/v1/call/calls?before=<callId>&limit=50` | Call log, newest-first | **Implemented** |
@@ -561,6 +563,37 @@ vocabulary. REST errors come back as:
 
 Some responses also carry a `stackTrace` array. **Ignore it and do not show it** — and make sure
 your deserializer tolerates unknown fields, because a strict parser will choke on it.
+
+### 5.4 Opening a dialog
+
+**Implemented.** The only way a client obtains a dialog id, and therefore the entry point to every
+conversation: `message.send` (§4.1) requires a `dialog_id` the caller participates in, and a client
+has no other way to create one.
+
+```
+POST /api/v1/message/dialogs
+{ "peerId": "<other user's id>" }
+
+201 → { "id": "...", "type": "direct",
+        "participantIds": ["<caller>", "<peer>"],
+        "createdAt": "2026-07-26T10:00:00Z" }
+```
+
+camelCase, like every other implemented endpoint.
+
+- **`201` when this call opened the dialog, `200` when it already existed.** Treat both as success;
+  a repeat is not an error, and the body is identical either way.
+- **Idempotent by the pair, not by the request.** The dialog is keyed on the two participant ids, so
+  a retry, a second device, and both people tapping at the same moment all converge on one dialog.
+  There is no need to check whether a dialog exists before calling this — that *is* the call.
+- **The caller comes from the token.** Only `peerId` is sent; a client cannot open a conversation on
+  somebody else's behalf. `/internal` may name every participant because only services reach it.
+- **`400` for opening a dialog with yourself** (a notes-to-self dialog is not implemented) and for a
+  `peerId` containing the reserved key separator. `404` if no such user.
+- `type` is lowercase (`direct`), matching §5.1.
+
+Persist the returned `id` locally on success: it is the dialog the UI opens, and until the dialog
+list endpoint exists it is the **only** record a client has that the conversation exists.
 
 ---
 

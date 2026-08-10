@@ -55,6 +55,19 @@ data class FallbackSendRequest(
 )
 
 @Serializable
+data class OpenDirectDialogRequest(
+    @SerialName("peerId") val peerId: String
+)
+
+@Serializable
+data class OpenedDialogResponse(
+    @SerialName("id") val id: String,
+    @SerialName("type") val type: String,
+    @SerialName("participantIds") val participantIds: List<String> = emptyList(),
+    @SerialName("createdAt") val createdAt: String? = null
+)
+
+@Serializable
 data class FallbackSendResponse(
     @SerialName("message_id") val messageId: String,
     @SerialName("client_msg_id") val clientMsgId: String,
@@ -75,6 +88,7 @@ inline fun <T, R> MessageApiResult<T>.mapValue(transform: (T) -> R): MessageApiR
     }
 
 interface MessageApi {
+    suspend fun openDirectDialog(peerId: String): MessageApiResult<OpenedDialogResponse>
     suspend fun dialogs(): MessageApiResult<List<WireDialog>>
     suspend fun messagesAfter(dialogId: String, after: String, limit: Int): MessageApiResult<List<WireMessage>>
     suspend fun messagesBefore(dialogId: String, before: String?, limit: Int): MessageApiResult<List<WireMessage>>
@@ -87,6 +101,15 @@ class KtorMessageApi(
     private val session: SessionManager
 ) : MessageApi {
     private val base: String get() = "${config.apiBaseUrl}/api/v1/message"
+
+    override suspend fun openDirectDialog(peerId: String): MessageApiResult<OpenedDialogResponse> =
+        execute { token ->
+            http.post("$base/dialogs") {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(OpenDirectDialogRequest(peerId))
+            }
+        }
 
     override suspend fun dialogs(): MessageApiResult<List<WireDialog>> =
         get<DialogListResponse>("$base/dialogs") { }.mapValue { it.dialogs }

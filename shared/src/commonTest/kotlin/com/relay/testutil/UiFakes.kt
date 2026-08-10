@@ -1,16 +1,23 @@
 package com.relay.testutil
 
 import com.relay.model.Contact
+import com.relay.model.Dialog
+import com.relay.model.DialogSummary
+import com.relay.model.DialogSyncState
+import com.relay.model.Message
 import com.relay.model.SearchPage
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.repository.ConnectionPhase
 import com.relay.repository.ConnectionStatus
+import com.relay.repository.MessageRepository
+import com.relay.repository.OpenDialogResult
 import com.relay.repository.UserRepository
 import com.relay.repository.UserResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 
 class FakeConnectionStatus(initial: ConnectionPhase = ConnectionPhase.LIVE) : ConnectionStatus {
     private val mutablePhase = MutableStateFlow(initial)
@@ -66,6 +73,28 @@ class FakeUserRepository : UserRepository {
     fun setContacts(contacts: List<Contact>) {
         stored.value = contacts
     }
+}
+
+class FakeMessageRepository : MessageRepository {
+    var openHandler: suspend (String) -> OpenDialogResult = { peerId ->
+        OpenDialogResult.Opened("dialog-for-$peerId")
+    }
+    val openedPeers = mutableListOf<String>()
+
+    override suspend fun openDirectDialog(peerId: String): OpenDialogResult {
+        openedPeers += peerId
+        return openHandler(peerId)
+    }
+
+    override fun observeDialogs(): Flow<List<Dialog>> = flowOf(emptyList())
+    override fun observeDialogSummaries(): Flow<List<DialogSummary>> = flowOf(emptyList())
+    override fun observeDialog(dialogId: String): Flow<Dialog?> = flowOf(null)
+    override fun observeMessages(dialogId: String, limit: Long): Flow<List<Message>> = flowOf(emptyList())
+    override fun observeSyncState(dialogId: String): Flow<DialogSyncState?> = flowOf(null)
+    override suspend fun storedMessageCount(dialogId: String): Long = 0
+    override suspend fun send(dialogId: String, text: String): Boolean = false
+    override suspend fun retry(localId: Long) = Unit
+    override suspend fun loadOlder(dialogId: String) = Unit
 }
 
 fun userSummary(
