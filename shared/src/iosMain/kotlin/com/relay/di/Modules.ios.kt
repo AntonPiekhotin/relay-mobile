@@ -8,10 +8,19 @@ import com.relay.config.AppConfig
 import com.relay.db.RelayDb
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import platform.Foundation.NSBundle
+
+private const val DEFAULT_DEV_HOST = "localhost"
+
+private fun infoPlistString(key: String): String? =
+    (NSBundle.mainBundle.objectForInfoDictionaryKey(key) as? String)?.takeIf { it.isNotBlank() }
+
+private fun devHost(): String = infoPlistString("RelayServerHost") ?: DEFAULT_DEV_HOST
 
 private data class IosDevConfig(
-    override val apiBaseUrl: String = "http://localhost:8080",
-    override val wsUrl: String = "ws://localhost:8083/ws"
+    private val host: String = devHost(),
+    override val apiBaseUrl: String = infoPlistString("RelayApiBaseUrl") ?: "http://$host:8080",
+    override val wsUrl: String = infoPlistString("RelayWsUrl") ?: "ws://$host:8083/ws"
 ) : AppConfig
 
 actual val platformModule: Module = module {
