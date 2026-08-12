@@ -1,0 +1,1 @@
+ALTER TABLE dialog ADD COLUMN peer_id TEXT;

@@ -12,4 +12,7 @@ sealed interface Route {
 
     @Serializable
     data object People : Route
+
+    @Serializable
+    data object Profile : Route
 }

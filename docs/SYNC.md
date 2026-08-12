@@ -28,9 +28,10 @@ SQLDelight. `local_id` is the stable local identity; `server_id` and `client_msg
 CREATE TABLE dialog (
     id               TEXT    NOT NULL PRIMARY KEY,
     type             TEXT    NOT NULL,          -- 'direct' | 'group'
-    title            TEXT,
+    title            TEXT,                      -- cached peer name, null until resolved
     last_message_at  INTEGER,
-    unread_count     INTEGER NOT NULL DEFAULT 0
+    unread_count     INTEGER NOT NULL DEFAULT 0,
+    peer_id          TEXT                       -- the other participant of a direct dialog
 );
 
 -- message.sq
@@ -73,6 +74,16 @@ CREATE TABLE sync_state (
 **The two UNIQUE constraints are the deduplication mechanism.** Do not rely on application-level checks — a concurrent ack and `message.new` for the same message will both pass an application check and both insert. Let the constraint reject the second.
 
 **Ordering:** `ORDER BY created_at DESC, local_id DESC`. The `local_id` tiebreaker keeps ordering stable when timestamps collide, which happens with rapid sends.
+
+**How a dialog gets its name.** message-service holds no names, so a direct dialog is named by its
+peer and the client resolves that itself. `peer_id` is recorded wherever the peer becomes known:
+opening a dialog from search (`MessageRepository.openDirectDialog` also writes the title straight
+away), the participant list during catch-up, and the sender of an inbound message that is not you.
+`PeerNameResolver` then observes every dialog with a `peer_id` and no `title`, resolves the name from
+the contact cache or `GET /api/v1/user/{id}`, and writes it back to `title` — the UI only ever reads
+the column. A failed lookup writes nothing and is retried the next time the dialog row changes.
+`backfillPeersFromMessages` repairs rows stored before `peer_id` existed by taking the first message
+sender who is not you; a dialog nobody has written in stays unnamed until the peer speaks.
 
 ---
 

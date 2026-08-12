@@ -5,6 +5,7 @@ import com.relay.network.ContactResponse
 import com.relay.network.PagedResponse
 import com.relay.network.UserApi
 import com.relay.network.UserApiResult
+import com.relay.network.UserProfileResponse
 import com.relay.network.UserSearchResultResponse
 import com.relay.network.UserSummaryResponse
 import com.relay.testutil.createTestDb
@@ -23,6 +24,18 @@ private class StubUserApi : UserApi {
         UserApiResult.Success(pageOf(emptyList(), page = page, hasNext = false))
     }
     var contactCalls = 0
+
+    var profileResult: UserApiResult<UserProfileResponse> = UserApiResult.Failure("not stubbed")
+    var userResults: (String) -> UserApiResult<UserSummaryResponse> =
+        { UserApiResult.Failure("not stubbed") }
+    var userCalls = 0
+
+    override suspend fun me(): UserApiResult<UserProfileResponse> = profileResult
+
+    override suspend fun userById(userId: String): UserApiResult<UserSummaryResponse> {
+        userCalls++
+        return userResults(userId)
+    }
 
     override suspend fun search(
         query: String,

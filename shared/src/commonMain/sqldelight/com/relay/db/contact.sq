@@ -12,6 +12,9 @@ CREATE INDEX idx_contact_name ON contact(first_name, last_name, user_id);
 selectAll:
 SELECT * FROM contact ORDER BY first_name, last_name, user_id;
 
+selectById:
+SELECT * FROM contact WHERE user_id = :userId;
+
 upsert:
 INSERT INTO contact(user_id, email, first_name, last_name, avatar_url, added_at)
 VALUES (:userId, :email, :firstName, :lastName, :avatarUrl, :addedAt)

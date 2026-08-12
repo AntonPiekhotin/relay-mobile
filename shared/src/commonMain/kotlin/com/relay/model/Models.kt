@@ -21,6 +21,7 @@ data class Dialog(
     val id: String,
     val type: String,
     val title: String?,
+    val peerId: String?,
     val lastMessageAt: Long?,
     val unreadCount: Long
 )
@@ -29,11 +30,17 @@ data class DialogSummary(
     val id: String,
     val type: String,
     val title: String?,
+    val peerId: String?,
     val lastMessageAt: Long?,
     val unreadCount: Long,
     val lastMessageText: String?,
     val lastMessageState: MessageState?,
     val lastMessageSenderId: String?
+)
+
+data class UnnamedDialog(
+    val dialogId: String,
+    val peerId: String
 )
 
 data class DialogSyncState(

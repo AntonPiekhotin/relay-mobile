@@ -17,6 +17,7 @@ import com.relay.testutil.FakeSocket
 import com.relay.testutil.FakeTokenStore
 import com.relay.testutil.createTestDb
 import com.relay.testutil.testJwt
+import com.relay.testutil.userSummary
 import com.relay.testutil.wireMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -134,13 +135,15 @@ class MessageRepositoryTest {
             )
         }
 
-        val result = harness.repository.openDirectDialog("peer-9")
+        val result = harness.repository.openDirectDialog(userSummary("peer-9", "Ada", "Lovelace"))
 
         assertIs<OpenDialogResult.Opened>(result)
         assertEquals("167f2922-36d9-4bc4-8cfe-0946601752ab", result.dialogId)
         val stored = harness.store.observeDialogs().first().single()
         assertEquals("167f2922-36d9-4bc4-8cfe-0946601752ab", stored.id)
         assertEquals("direct", stored.type)
+        assertEquals("Ada Lovelace", stored.title)
+        assertEquals("peer-9", stored.peerId)
         assertEquals(1_786_308_897_327L, stored.lastMessageAt)
     }
 
@@ -150,7 +153,7 @@ class MessageRepositoryTest {
         harness.logIn()
         harness.api.openDialogHandler = { MessageApiResult.Rejected(400) }
 
-        val result = harness.repository.openDirectDialog("myself")
+        val result = harness.repository.openDirectDialog(userSummary("myself"))
 
         assertIs<OpenDialogResult.Failed>(result)
         assertEquals(0, harness.store.observeDialogs().first().size)

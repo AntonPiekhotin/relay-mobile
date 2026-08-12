@@ -157,6 +157,6 @@ class DialogListViewModelTest {
         val row = viewModel.state.value.dialogs.single()
         assertEquals("No messages yet", row.preview)
         assertEquals("", row.timestamp)
-        assertEquals("Dialog d1", row.title)
+        assertEquals("Unknown user", row.title)
     }
 }

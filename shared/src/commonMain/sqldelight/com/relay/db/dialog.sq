@@ -3,20 +3,41 @@ CREATE TABLE dialog (
     type             TEXT    NOT NULL,
     title            TEXT,
     last_message_at  INTEGER,
-    unread_count     INTEGER NOT NULL DEFAULT 0
+    unread_count     INTEGER NOT NULL DEFAULT 0,
+    peer_id          TEXT
 );
 
 insertIfAbsent:
-INSERT OR IGNORE INTO dialog(id, type, title, last_message_at, unread_count)
-VALUES (:id, :type, :title, :lastMessageAt, 0);
+INSERT OR IGNORE INTO dialog(id, type, title, last_message_at, unread_count, peer_id)
+VALUES (:id, :type, :title, :lastMessageAt, 0, :peerId);
 
 upsertFromServer:
-INSERT INTO dialog(id, type, title, last_message_at, unread_count)
-VALUES (:id, :type, :title, :lastMessageAt, 0)
+INSERT INTO dialog(id, type, title, last_message_at, unread_count, peer_id)
+VALUES (:id, :type, :title, :lastMessageAt, 0, :peerId)
 ON CONFLICT(id) DO UPDATE SET
     type = excluded.type,
-    title = excluded.title,
+    title = COALESCE(excluded.title, dialog.title),
+    peer_id = COALESCE(excluded.peer_id, dialog.peer_id),
     last_message_at = MAX(COALESCE(dialog.last_message_at, 0), COALESCE(excluded.last_message_at, 0));
+
+setTitle:
+UPDATE dialog SET title = :title WHERE id = :id;
+
+fillPeerIfMissing:
+UPDATE dialog SET peer_id = :peerId WHERE id = :id AND peer_id IS NULL;
+
+backfillPeersFromMessages:
+UPDATE dialog
+SET peer_id = (
+    SELECT m.sender_id FROM message m
+    WHERE m.dialog_id = dialog.id AND m.sender_id != :selfId
+    ORDER BY m.created_at ASC, m.local_id ASC
+    LIMIT 1
+)
+WHERE peer_id IS NULL;
+
+selectUnnamed:
+SELECT id, peer_id FROM dialog WHERE title IS NULL AND peer_id IS NOT NULL;
 
 bumpLastMessageAt:
 UPDATE dialog
@@ -33,6 +54,7 @@ SELECT
     d.title,
     d.last_message_at,
     d.unread_count,
+    d.peer_id,
     m.text AS last_text,
     m.state AS last_state,
     m.sender_id AS last_sender_id

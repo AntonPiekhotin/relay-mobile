@@ -29,6 +29,18 @@ data class PersonUi(
     val isContact: Boolean
 )
 
+data class ProfileUi(
+    val name: String,
+    val email: String,
+    val memberSince: String?
+)
+
+data class ProfileState(
+    val profile: ProfileUi? = null,
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
 sealed interface ConnectionUi {
     data object Unknown : ConnectionUi
     data object Live : ConnectionUi
@@ -55,7 +67,7 @@ data class DialogListState(
 enum class PeopleTab { CONTACTS, SEARCH }
 
 data class PeopleState(
-    val tab: PeopleTab = PeopleTab.CONTACTS,
+    val tab: PeopleTab = PeopleTab.SEARCH,
     val query: String = "",
     val contacts: List<PersonUi> = emptyList(),
     val results: List<PersonUi> = emptyList(),

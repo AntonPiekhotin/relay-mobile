@@ -15,6 +15,8 @@ import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.dialogs.DialogListViewModel
 import com.relay.ui.people.PeopleScreen
 import com.relay.ui.people.PeopleViewModel
+import com.relay.ui.profile.ProfileScreen
+import com.relay.ui.profile.ProfileViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -30,7 +32,18 @@ fun RelayNavHost(
             DialogListScreen(
                 state = state,
                 onOpenDialog = { navController.navigate(Route.Chat(it)) },
-                onOpenPeople = { navController.navigate(Route.People) },
+                onOpenSearch = { navController.navigate(Route.People) },
+                onOpenProfile = { navController.navigate(Route.Profile) }
+            )
+        }
+
+        composable<Route.Profile> {
+            val viewModel = koinViewModel<ProfileViewModel>()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            ProfileScreen(
+                state = state,
+                onBack = { navController.popBackStack() },
+                onRetry = viewModel::refresh,
                 onLogout = onLogout
             )
         }

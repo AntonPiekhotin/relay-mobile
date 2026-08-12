@@ -9,6 +9,7 @@ import com.relay.db.ContactStore
 import com.relay.db.MessageStore
 import com.relay.network.ConnectionManager
 import com.relay.network.ConnectionState
+import com.relay.repository.PeerNameResolver
 import com.relay.sync.Outbox
 import com.relay.sync.SyncEngine
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,8 @@ class SessionViewModel(
     private val syncEngine: SyncEngine,
     private val outbox: Outbox,
     private val store: MessageStore,
-    private val contacts: ContactStore
+    private val contacts: ContactStore,
+    private val peerNames: PeerNameResolver
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = session.state
@@ -42,11 +44,13 @@ class SessionViewModel(
                     is AuthState.LoggedIn -> {
                         syncEngine.start()
                         outbox.start()
+                        peerNames.start()
                         connection.start()
                     }
                     is AuthState.LoggedOut -> {
                         connection.stop()
                         outbox.stop()
+                        peerNames.stop()
                         syncEngine.stop()
                         store.clearAll()
                         contacts.clearAll()

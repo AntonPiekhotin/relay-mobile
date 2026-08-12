@@ -6,6 +6,7 @@ import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
 import com.relay.model.Message
 import com.relay.model.SearchPage
+import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.repository.ConnectionPhase
@@ -31,6 +32,13 @@ class FakeConnectionStatus(initial: ConnectionPhase = ConnectionPhase.LIVE) : Co
 class FakeUserRepository : UserRepository {
     private val stored = MutableStateFlow<List<Contact>>(emptyList())
 
+    var profileHandler: suspend () -> UserResult<UserProfile> =
+        { UserResult.Success(UserProfile(userSummary("me"), createdAtMillis = null)) }
+    var lookupHandler: suspend (String) -> UserResult<UserSummary> =
+        { id -> UserResult.Success(userSummary(id)) }
+
+    val lookedUp = mutableListOf<String>()
+
     var searchHandler: suspend (String, Int) -> UserResult<SearchPage> =
         { _, _ -> UserResult.Success(SearchPage(emptyList(), page = 0, hasNext = false)) }
     var refreshHandler: suspend () -> UserResult<Unit> = { UserResult.Success(Unit) }
@@ -46,6 +54,13 @@ class FakeUserRepository : UserRepository {
     override suspend fun refreshContacts(): UserResult<Unit> {
         refreshCalls++
         return refreshHandler()
+    }
+
+    override suspend fun profile(): UserResult<UserProfile> = profileHandler()
+
+    override suspend fun lookup(userId: String): UserResult<UserSummary> {
+        lookedUp += userId
+        return lookupHandler(userId)
     }
 
     override suspend fun search(query: String, page: Int): UserResult<SearchPage> {
@@ -81,9 +96,9 @@ class FakeMessageRepository : MessageRepository {
     }
     val openedPeers = mutableListOf<String>()
 
-    override suspend fun openDirectDialog(peerId: String): OpenDialogResult {
-        openedPeers += peerId
-        return openHandler(peerId)
+    override suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult {
+        openedPeers += peer.id
+        return openHandler(peer.id)
     }
 
     override fun observeDialogs(): Flow<List<Dialog>> = flowOf(emptyList())

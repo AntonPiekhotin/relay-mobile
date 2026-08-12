@@ -6,6 +6,13 @@ data class UserSummary(
     val firstName: String,
     val lastName: String,
     val avatarUrl: String?
+) {
+    val displayName: String get() = "$firstName $lastName".trim().ifBlank { email }
+}
+
+data class UserProfile(
+    val user: UserSummary,
+    val createdAtMillis: Long?
 )
 
 data class Contact(

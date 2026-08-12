@@ -3,16 +3,20 @@ package com.relay.ui.state
 import com.relay.model.Contact
 import com.relay.model.DialogSummary
 import com.relay.model.Message
+import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.repository.ConnectionPhase
 import com.relay.ui.format.dayKeyOf
 import com.relay.ui.format.formatClockTime
 import com.relay.ui.format.formatDaySeparator
+import com.relay.ui.format.formatFullDate
 import com.relay.ui.format.formatListTimestamp
 
-fun dialogTitleOf(title: String?, dialogId: String): String =
-    title?.takeIf { it.isNotBlank() } ?: "Dialog ${dialogId.take(8)}"
+const val UNRESOLVED_PEER_TITLE = "Unknown user"
+
+fun dialogTitleOf(title: String?): String =
+    title?.takeIf { it.isNotBlank() } ?: UNRESOLVED_PEER_TITLE
 
 fun ConnectionPhase.toConnectionUi(): ConnectionUi = when (this) {
     ConnectionPhase.LIVE -> ConnectionUi.Live
@@ -40,7 +44,7 @@ fun List<DialogSummary>.toDialogUi(selfId: String?, nowMillis: Long): List<Dialo
     map { summary ->
         DialogUi(
             id = summary.id,
-            title = dialogTitleOf(summary.title, summary.id),
+            title = dialogTitleOf(summary.title),
             preview = summary.lastMessageText ?: "No messages yet",
             timestamp = summary.lastMessageAt?.let { formatListTimestamp(it, nowMillis) } ?: "",
             unreadCount = summary.unreadCount,
@@ -52,9 +56,16 @@ fun List<DialogSummary>.toDialogUi(selfId: String?, nowMillis: Long): List<Dialo
 fun UserSummary.toPersonUi(isContact: Boolean): PersonUi =
     PersonUi(
         id = id,
-        name = "$firstName $lastName".trim().ifBlank { email },
+        name = displayName,
         email = email,
         isContact = isContact
+    )
+
+fun UserProfile.toProfileUi(): ProfileUi =
+    ProfileUi(
+        name = user.displayName,
+        email = user.email,
+        memberSince = createdAtMillis?.let { formatFullDate(it) }
     )
 
 fun List<Contact>.toPersonUi(): List<PersonUi> = map { it.user.toPersonUi(isContact = true) }

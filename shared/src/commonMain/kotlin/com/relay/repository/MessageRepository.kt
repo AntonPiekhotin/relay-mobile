@@ -7,6 +7,7 @@ import com.relay.model.Dialog
 import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
 import com.relay.model.Message
+import com.relay.model.UserSummary
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
 import com.relay.protocol.isoToEpochMillisOrNull
@@ -26,7 +27,7 @@ sealed interface OpenDialogResult {
 }
 
 interface MessageRepository {
-    suspend fun openDirectDialog(peerId: String): OpenDialogResult
+    suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult
     fun observeDialogs(): Flow<List<Dialog>>
     fun observeDialogSummaries(): Flow<List<DialogSummary>>
     fun observeDialog(dialogId: String): Flow<Dialog?>
@@ -47,15 +48,16 @@ class MessageRepositoryImpl(
     private val loadOlderGuard = Mutex()
     private val loadingOlder = mutableSetOf<String>()
 
-    override suspend fun openDirectDialog(peerId: String): OpenDialogResult =
-        when (val result = api.openDirectDialog(peerId)) {
+    override suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult =
+        when (val result = api.openDirectDialog(peer.id)) {
             is MessageApiResult.Success -> {
                 val opened = result.value
                 store.upsertDialog(
                     id = opened.id,
                     type = opened.type,
-                    title = null,
-                    lastMessageAt = opened.createdAt?.let { isoToEpochMillisOrNull(it) }
+                    title = peer.displayName,
+                    lastMessageAt = opened.createdAt?.let { isoToEpochMillisOrNull(it) },
+                    peerId = peer.id
                 )
                 OpenDialogResult.Opened(opened.id)
             }
@@ -115,7 +117,8 @@ class MessageRepositoryImpl(
         val result = api.messagesBefore(dialogId, syncState.oldestLoadedId, HISTORY_PAGE_SIZE)
         if (result !is MessageApiResult.Success) return
         val page = result.value
-        page.forEach { store.applyWireMessage(it) }
+        val selfId = (session.state.value as? AuthState.LoggedIn)?.userId
+        page.forEach { store.applyWireMessage(it, selfId) }
         store.updateOldestLoaded(
             dialogId = dialogId,
             oldestLoadedId = page.lastOrNull()?.messageId ?: syncState.oldestLoadedId,

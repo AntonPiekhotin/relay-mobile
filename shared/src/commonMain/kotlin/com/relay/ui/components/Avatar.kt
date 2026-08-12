@@ -9,20 +9,28 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-private val AVATAR_SIZE = 44.dp
+val AVATAR_SIZE = 44.dp
+val LARGE_AVATAR_SIZE = 96.dp
 
 @Composable
-fun Avatar(label: String, modifier: Modifier = Modifier) {
+fun Avatar(
+    label: String,
+    modifier: Modifier = Modifier,
+    size: Dp = AVATAR_SIZE,
+    textStyle: TextStyle = MaterialTheme.typography.titleMedium
+) {
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         shape = CircleShape,
-        modifier = modifier.size(AVATAR_SIZE)
+        modifier = modifier.size(size)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(text = initialsOf(label), style = MaterialTheme.typography.titleMedium)
+            Text(text = initialsOf(label), style = textStyle)
         }
     }
 }

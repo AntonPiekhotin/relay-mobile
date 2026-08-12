@@ -3,12 +3,14 @@ package com.relay.repository
 import com.relay.db.ContactStore
 import com.relay.model.Contact
 import com.relay.model.SearchPage
+import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.network.ContactResponse
 import com.relay.network.PagedResponse
 import com.relay.network.UserApi
 import com.relay.network.UserApiResult
+import com.relay.network.UserProfileResponse
 import com.relay.network.UserSearchResultResponse
 import com.relay.network.UserSummaryResponse
 import com.relay.protocol.isoToEpochMillisOrNull
@@ -26,6 +28,8 @@ sealed interface UserResult<out T> {
 interface UserRepository {
     fun observeContacts(): Flow<List<Contact>>
     suspend fun refreshContacts(): UserResult<Unit>
+    suspend fun profile(): UserResult<UserProfile>
+    suspend fun lookup(userId: String): UserResult<UserSummary>
     suspend fun search(query: String, page: Int): UserResult<SearchPage>
     suspend fun addContact(user: UserSummary): UserResult<Unit>
     suspend fun removeContact(userId: String): UserResult<Unit>
@@ -54,6 +58,19 @@ class UserRepositoryImpl(
         return UserResult.Success(Unit)
     }
 
+    override suspend fun profile(): UserResult<UserProfile> =
+        when (val result = api.me()) {
+            is UserApiResult.Success -> UserResult.Success(result.value.toDomain())
+            is UserApiResult.Failure -> UserResult.Failure(result.reason)
+        }
+
+    override suspend fun lookup(userId: String): UserResult<UserSummary> =
+        contacts.find(userId)?.let { UserResult.Success(it) }
+            ?: when (val result = api.userById(userId)) {
+                is UserApiResult.Success -> UserResult.Success(result.value.toDomain())
+                is UserApiResult.Failure -> UserResult.Failure(result.reason)
+            }
+
     override suspend fun search(query: String, page: Int): UserResult<SearchPage> =
         when (val result = api.search(query, page, PEOPLE_PAGE_SIZE)) {
             is UserApiResult.Success -> UserResult.Success(result.value.toSearchPage())
@@ -81,6 +98,18 @@ class UserRepositoryImpl(
 
 private fun UserSummaryResponse.toDomain(): UserSummary =
     UserSummary(id = id, email = email, firstName = firstName, lastName = lastName, avatarUrl = avatarUrl)
+
+private fun UserProfileResponse.toDomain(): UserProfile =
+    UserProfile(
+        user = UserSummary(
+            id = id,
+            email = email,
+            firstName = firstName,
+            lastName = lastName,
+            avatarUrl = avatarUrl
+        ),
+        createdAtMillis = createdAt?.let { isoToEpochMillisOrNull(it) }
+    )
 
 private fun ContactResponse.toDomain(): Contact =
     Contact(user = user.toDomain(), addedAtMillis = isoToEpochMillisOrNull(addedAt))

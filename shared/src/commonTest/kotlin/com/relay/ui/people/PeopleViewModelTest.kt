@@ -206,6 +206,7 @@ class PeopleViewModelTest {
         val users = FakeUserRepository()
         val messages = FakeMessageRepository()
         messages.openHandler = { OpenDialogResult.Opened("dialog-7") }
+        users.setContacts(listOf(contact("peer-1")))
         val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
@@ -224,6 +225,7 @@ class PeopleViewModelTest {
         val users = FakeUserRepository()
         val messages = FakeMessageRepository()
         messages.openHandler = { OpenDialogResult.Failed("Cannot reach the server") }
+        users.setContacts(listOf(contact("peer-1")))
         val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
@@ -241,6 +243,7 @@ class PeopleViewModelTest {
     fun tappingMessageTwiceOpensOnlyOneDialog() = runTest {
         val users = FakeUserRepository()
         val messages = FakeMessageRepository()
+        users.setContacts(listOf(contact("peer-1")))
         val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
         advanceUntilIdle()
 
@@ -260,9 +263,9 @@ class PeopleViewModelTest {
         advanceUntilIdle()
         assertEquals("Cannot reach the server", viewModel.state.value.error)
 
-        viewModel.selectTab(PeopleTab.SEARCH)
+        viewModel.selectTab(PeopleTab.CONTACTS)
 
-        assertEquals(PeopleTab.SEARCH, viewModel.state.value.tab)
+        assertEquals(PeopleTab.CONTACTS, viewModel.state.value.tab)
         assertEquals(null, viewModel.state.value.error)
     }
 }

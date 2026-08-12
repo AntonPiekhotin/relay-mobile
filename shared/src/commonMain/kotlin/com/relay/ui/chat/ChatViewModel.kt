@@ -114,7 +114,7 @@ class ChatViewModel(
         val selfId = (extras.auth as? AuthState.LoggedIn)?.userId
         return ChatState(
             dialogId = dialogId,
-            title = dialogTitleOf(chat.dialog?.title, dialogId),
+            title = dialogTitleOf(chat.dialog?.title),
             messages = chat.rows.toMessageUi(selfId, now()),
             isLoadingOlder = extras.loading,
             hasMoreHistory = chat.syncState?.hasMoreHistory ?: false,

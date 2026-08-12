@@ -46,6 +46,11 @@ fun formatDaySeparator(
     }
 }
 
+fun formatFullDate(epochMillis: Long, zone: TimeZone = TimeZone.currentSystemDefault()): String {
+    val date = localDateTimeOf(epochMillis, zone).date
+    return "${date.day} ${MONTHS[date.month.number - 1]} ${date.year}"
+}
+
 fun dayKeyOf(epochMillis: Long, zone: TimeZone = TimeZone.currentSystemDefault()): Long =
     localDateTimeOf(epochMillis, zone).date.toEpochDays().toLong()
 

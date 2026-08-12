@@ -42,12 +42,14 @@ class PeopleViewModel(
 
     private var searchJob: Job? = null
     private var contactIds: Set<String> = emptySet()
+    private var knownContacts: List<UserSummary> = emptyList()
     private var lastFound: List<UserSearchResult> = emptyList()
 
     init {
         viewModelScope.launch {
             users.observeContacts().collect { contacts ->
                 contactIds = contacts.map { it.user.id }.toSet()
+                knownContacts = contacts.map { it.user }
                 mutableState.update {
                     it.copy(
                         contacts = contacts.toPersonUi(),
@@ -101,9 +103,10 @@ class PeopleViewModel(
 
     fun openChat(userId: String) {
         if (userId in mutableState.value.pendingIds) return
+        val peer = findUser(userId) ?: return
         mutableState.update { it.copy(pendingIds = it.pendingIds + userId, error = null) }
         viewModelScope.launch {
-            when (val result = messages.openDirectDialog(userId)) {
+            when (val result = messages.openDirectDialog(peer)) {
                 is OpenDialogResult.Opened -> {
                     mutableState.update { it.copy(pendingIds = it.pendingIds - userId) }
                     openedDialogs.send(result.dialogId)
@@ -151,4 +154,5 @@ class PeopleViewModel(
 
     private fun findUser(userId: String): UserSummary? =
         lastFound.firstOrNull { it.user.id == userId }?.user
+            ?: knownContacts.firstOrNull { it.id == userId }
 }

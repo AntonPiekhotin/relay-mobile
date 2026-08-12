@@ -12,8 +12,12 @@ import com.relay.ui.components.CONNECTION_STRIP_TAG
 import com.relay.ui.components.ConnectionStrip
 import com.relay.ui.chat.CHAT_ERROR_TAG
 import com.relay.ui.chat.ChatScreen
+import com.relay.ui.dialogs.DIALOGS_PROFILE_TAG
+import com.relay.ui.dialogs.DIALOGS_SEARCH_TAG
 import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.people.PeopleScreen
+import com.relay.ui.profile.PROFILE_LOGOUT_TAG
+import com.relay.ui.profile.ProfileScreen
 import com.relay.ui.state.ChatState
 import com.relay.ui.state.ConnectionUi
 import com.relay.ui.state.DialogListState
@@ -21,6 +25,8 @@ import com.relay.ui.state.DialogUi
 import com.relay.ui.state.PeopleState
 import com.relay.ui.state.PeopleTab
 import com.relay.ui.state.PersonUi
+import com.relay.ui.state.ProfileState
+import com.relay.ui.state.ProfileUi
 import com.relay.ui.theme.RelayTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -67,8 +73,8 @@ class ScreenUiTest {
                 DialogListScreen(
                     state = DialogListState(isLoaded = true),
                     onOpenDialog = {},
-                    onOpenPeople = {},
-                    onLogout = {}
+                    onOpenSearch = {},
+                    onOpenProfile = {}
                 )
             }
         }
@@ -82,8 +88,8 @@ class ScreenUiTest {
                 DialogListScreen(
                     state = DialogListState(isLoaded = false),
                     onOpenDialog = {},
-                    onOpenPeople = {},
-                    onLogout = {}
+                    onOpenSearch = {},
+                    onOpenProfile = {}
                 )
             }
         }
@@ -101,8 +107,8 @@ class ScreenUiTest {
                         isLoaded = true
                     ),
                     onOpenDialog = { opened += it },
-                    onOpenPeople = {},
-                    onLogout = {}
+                    onOpenSearch = {},
+                    onOpenProfile = {}
                 )
             }
         }
@@ -202,6 +208,75 @@ class ScreenUiTest {
             }
         }
         onNodeWithTag(CHAT_ERROR_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun theDialogListOffersSearchAndProfileInsteadOfALogoutButton() = runComposeUiTest {
+        val searched = mutableListOf<Unit>()
+        val profiled = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                DialogListScreen(
+                    state = DialogListState(isLoaded = true),
+                    onOpenDialog = {},
+                    onOpenSearch = { searched += Unit },
+                    onOpenProfile = { profiled += Unit }
+                )
+            }
+        }
+        onNodeWithText("Log out").assertDoesNotExist()
+        onNodeWithTag(DIALOGS_SEARCH_TAG).assertIsDisplayed().performClick()
+        onNodeWithTag(DIALOGS_PROFILE_TAG).assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(1, searched.size)
+        assertEquals(1, profiled.size)
+    }
+
+    @Test
+    fun theProfileScreenShowsTheAccountAndOffersLogout() = runComposeUiTest {
+        val loggedOut = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                ProfileScreen(
+                    state = ProfileState(
+                        profile = ProfileUi(
+                            name = "Ada Lovelace",
+                            email = "ada@relay.dev",
+                            memberSince = "26 Jul 2026"
+                        )
+                    ),
+                    onBack = {},
+                    onRetry = {},
+                    onLogout = { loggedOut += Unit }
+                )
+            }
+        }
+        onNodeWithText("Ada Lovelace").assertIsDisplayed()
+        onNodeWithText("ada@relay.dev").assertIsDisplayed()
+        onNodeWithText("26 Jul 2026").assertIsDisplayed()
+        onNodeWithTag(PROFILE_LOGOUT_TAG).assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(1, loggedOut.size)
+    }
+
+    @Test
+    fun anUnreachableProfileStillOffersLogoutAndARetry() = runComposeUiTest {
+        val retried = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                ProfileScreen(
+                    state = ProfileState(error = "Cannot reach the server"),
+                    onBack = {},
+                    onRetry = { retried += Unit },
+                    onLogout = {}
+                )
+            }
+        }
+        onNodeWithText("Cannot reach the server").assertIsDisplayed()
+        onNodeWithTag(PROFILE_LOGOUT_TAG).assertIsDisplayed()
+        onNodeWithText("Try again").assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(1, retried.size)
     }
 
     @Test

@@ -15,13 +15,14 @@ fun MessageNewPayload.toWireMessage(): WireMessage =
         clientMsgId = clientMsgId
     )
 
-suspend fun MessageStore.applyWireMessage(message: WireMessage) {
+suspend fun MessageStore.applyWireMessage(message: WireMessage, selfId: String? = null) {
     applyRemoteMessage(
         serverId = message.messageId,
         clientMsgId = message.clientMsgId,
         dialogId = message.dialogId,
         senderId = message.senderId,
         text = message.text,
-        createdAt = isoToEpochMillis(message.createdAt)
+        createdAt = isoToEpochMillis(message.createdAt),
+        selfId = selfId
     )
 }

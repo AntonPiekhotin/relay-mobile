@@ -19,6 +19,10 @@ class ContactStore(
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
 
+    suspend fun find(userId: String): UserSummary? = withContext(dispatcher) {
+        db.contactQueries.selectById(userId).executeAsOneOrNull()?.toDomain()?.user
+    }
+
     suspend fun replaceAll(contacts: List<DomainContact>): Unit = withContext(dispatcher) {
         db.transaction {
             db.contactQueries.deleteAll()

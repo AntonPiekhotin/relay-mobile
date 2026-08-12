@@ -129,7 +129,7 @@ class SyncEngine(
                 serverId = frame.payload.messageId,
                 createdAt = isoToEpochMillisOrNull(frame.payload.createdAt)
             )
-            is InboundFrame.MessageNew -> store.applyWireMessage(frame.payload.toWireMessage())
+            is InboundFrame.MessageNew -> store.applyWireMessage(frame.payload.toWireMessage(), selfId())
             is InboundFrame.Error -> onError(frame.payload)
             else -> Unit
         }
@@ -141,15 +141,19 @@ class SyncEngine(
         store.failPendingByClientMsgId(refId, payload.code)
     }
 
+    private fun selfId(): String? = (socket.state.value as? ConnectionState.Connected)?.userId
+
     private suspend fun catchUp(): Boolean {
         var complete = true
+        val selfId = selfId()
         when (val result = api.dialogs()) {
             is MessageApiResult.Success -> result.value.forEach { dialog ->
                 store.upsertDialog(
                     id = dialog.dialogId,
                     type = dialog.type,
                     title = null,
-                    lastMessageAt = dialog.lastMessageAt?.let { isoToEpochMillisOrNull(it) }
+                    lastMessageAt = dialog.lastMessageAt?.let { isoToEpochMillisOrNull(it) },
+                    peerId = selfId?.let { self -> dialog.participantIds.firstOrNull { it != self } }
                 )
             }
             else -> complete = false
@@ -174,7 +178,7 @@ class SyncEngine(
         val result = api.messagesBefore(dialogId, before = null, limit = CATCHUP_PAGE_SIZE)
         if (result !is MessageApiResult.Success) return false
         val page = result.value
-        page.forEach { store.applyWireMessage(it) }
+        page.forEach { store.applyWireMessage(it, selfId()) }
         store.updateNewestSynced(dialogId, page.firstOrNull()?.messageId)
         store.updateOldestLoaded(
             dialogId = dialogId,
@@ -190,7 +194,7 @@ class SyncEngine(
             val result = api.messagesAfter(dialogId, after, CATCHUP_PAGE_SIZE)
             if (result !is MessageApiResult.Success) return false
             val page = result.value
-            page.forEach { store.applyWireMessage(it) }
+            page.forEach { store.applyWireMessage(it, selfId()) }
             after = page.lastOrNull()?.messageId ?: return true
             store.updateNewestSynced(dialogId, after)
             if (page.size < CATCHUP_PAGE_SIZE) return true

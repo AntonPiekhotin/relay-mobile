@@ -78,6 +78,11 @@ Every schema change needs: the `.sq` edit, a new `<n>.sqm` migrating the previou
 regenerated snapshot in `src/commonMain/sqldelight/databases/`. `verifyMigrations` is on, so
 `./gradlew :shared:check` fails when they disagree — **`allTests` does not run that check.**
 
+**A `.sqm` file only sees tables created by earlier `.sqm` files, never the `.sq` ones.** That is why
+`0.sqm` exists: it restates the original phase-2 tables so later migrations can `ALTER` them. It runs
+only for a version-0 database, which cannot exist — fresh installs go through `create()`. Keep it in
+sync with the real v1 shape, and never renumber it: the schema version is `max(<n>.sqm) + 1`.
+
 ---
 
 ## Current phase

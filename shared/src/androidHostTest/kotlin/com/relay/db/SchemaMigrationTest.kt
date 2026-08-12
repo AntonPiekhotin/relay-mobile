@@ -50,7 +50,26 @@ class SchemaMigrationTest {
 
     @Test
     fun schemaVersionMatchesTheNumberOfShippedMigrations() {
-        assertEquals(2L, RelayDb.Schema.version)
+        assertEquals(3L, RelayDb.Schema.version)
+    }
+
+    @Test
+    fun upgradingAPhaseThreeDatabaseAddsThePeerColumn() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        VERSION_1_SCHEMA.forEach { driver.execute(null, it.trimIndent(), 0) }
+        driver.execute(
+            null,
+            "INSERT INTO dialog(id, type, title, last_message_at) VALUES ('d1', 'direct', NULL, 1)",
+            0
+        )
+
+        RelayDb.Schema.migrate(driver, oldVersion = 1, newVersion = RelayDb.Schema.version)
+
+        val store = MessageStore(RelayDb(driver), Dispatchers.Unconfined)
+        store.upsertDialog("d1", "direct", "Ada Lovelace", 1, peerId = "peer-1")
+        val stored = store.observeDialogs().first().single()
+        assertEquals("Ada Lovelace", stored.title)
+        assertEquals("peer-1", stored.peerId)
     }
 
     @Test

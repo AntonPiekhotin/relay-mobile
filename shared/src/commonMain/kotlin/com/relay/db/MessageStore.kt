@@ -6,6 +6,7 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
 import com.relay.model.MessageState
+import com.relay.model.UnnamedDialog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -44,6 +45,12 @@ class MessageStore(
             .mapToOneOrNull(dispatcher)
             .map { row -> row?.toDomain() }
 
+    fun observeUnnamedDialogs(): Flow<List<UnnamedDialog>> =
+        db.dialogQueries.selectUnnamed()
+            .asFlow()
+            .mapToList(dispatcher)
+            .map { rows -> rows.map { UnnamedDialog(it.id, it.peer_id) } }
+
     fun observeSyncState(dialogId: String): Flow<DialogSyncState?> =
         db.sync_stateQueries.selectByDialog(dialogId)
             .asFlow()
@@ -58,7 +65,7 @@ class MessageStore(
         createdAt: Long
     ): Unit = withContext(dispatcher) {
         db.transaction {
-            db.dialogQueries.insertIfAbsent(dialogId, DEFAULT_DIALOG_TYPE, null, null)
+            db.dialogQueries.insertIfAbsent(dialogId, DEFAULT_DIALOG_TYPE, null, null, null)
             db.sync_stateQueries.insertIfAbsent(dialogId)
             db.messageQueries.insertPending(clientMsgId, dialogId, senderId, text, createdAt)
             db.dialogQueries.bumpLastMessageAt(createdAt, dialogId)
@@ -92,10 +99,13 @@ class MessageStore(
         dialogId: String,
         senderId: String,
         text: String,
-        createdAt: Long
+        createdAt: Long,
+        selfId: String? = null
     ): Unit = withContext(dispatcher) {
+        val peerId = senderId.takeIf { selfId != null && it != selfId }
         db.transaction {
-            db.dialogQueries.insertIfAbsent(dialogId, DEFAULT_DIALOG_TYPE, null, null)
+            db.dialogQueries.insertIfAbsent(dialogId, DEFAULT_DIALOG_TYPE, null, null, peerId)
+            if (peerId != null) db.dialogQueries.fillPeerIfMissing(peerId, dialogId)
             db.sync_stateQueries.insertIfAbsent(dialogId)
             val existing = db.messageQueries.findByServerId(serverId).executeAsOneOrNull()
             if (existing == null) {
@@ -112,13 +122,27 @@ class MessageStore(
         }
     }
 
-    suspend fun upsertDialog(id: String, type: String, title: String?, lastMessageAt: Long?): Unit =
+    suspend fun upsertDialog(
+        id: String,
+        type: String,
+        title: String?,
+        lastMessageAt: Long?,
+        peerId: String? = null
+    ): Unit =
         withContext(dispatcher) {
             db.transaction {
-                db.dialogQueries.upsertFromServer(id, type, title, lastMessageAt)
+                db.dialogQueries.upsertFromServer(id, type, title, lastMessageAt, peerId)
                 db.sync_stateQueries.insertIfAbsent(id)
             }
         }
+
+    suspend fun setDialogTitle(dialogId: String, title: String): Unit = withContext(dispatcher) {
+        db.dialogQueries.setTitle(title, dialogId)
+    }
+
+    suspend fun backfillPeers(selfId: String): Unit = withContext(dispatcher) {
+        db.dialogQueries.backfillPeersFromMessages(selfId)
+    }
 
     suspend fun dialogIds(): List<String> = withContext(dispatcher) {
         db.dialogQueries.selectIds().executeAsList()
@@ -219,6 +243,7 @@ private fun SelectAllWithPreview.toDomain(): DialogSummary =
         id = id,
         type = type,
         title = title,
+        peerId = peer_id,
         lastMessageAt = last_message_at,
         unreadCount = unread_count,
         lastMessageText = last_text,
@@ -231,6 +256,7 @@ private fun Dialog.toDomain(): DomainDialog =
         id = id,
         type = type,
         title = title,
+        peerId = peer_id,
         lastMessageAt = last_message_at,
         unreadCount = unread_count
     )

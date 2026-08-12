@@ -17,6 +17,7 @@ import com.relay.network.UserApi
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.repository.MessageRepositoryImpl
+import com.relay.repository.PeerNameResolver
 import com.relay.repository.SocketConnectionStatus
 import com.relay.repository.UserRepository
 import com.relay.repository.UserRepositoryImpl
@@ -26,6 +27,7 @@ import com.relay.ui.SessionViewModel
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.dialogs.DialogListViewModel
 import com.relay.ui.people.PeopleViewModel
+import com.relay.ui.profile.ProfileViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,11 +52,13 @@ val commonModule = module {
     single { ContactStore(get(), ioDispatcher()) }
     single<UserApi> { KtorUserApi(get(), get(), get()) }
     single<UserRepository> { UserRepositoryImpl(get(), get()) }
+    single { PeerNameResolver(get(), get(), get(), get()) }
     single<ConnectionStatus> { SocketConnectionStatus(get()) }
-    factory { SessionViewModel(get(), get(), get(), get(), get(), get()) }
+    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
     factory { (dialogId: String) -> ChatViewModel(dialogId, get(), get(), get()) }
     factory { PeopleViewModel(get(), get()) }
+    factory { ProfileViewModel(get()) }
 }
 
 expect val platformModule: Module

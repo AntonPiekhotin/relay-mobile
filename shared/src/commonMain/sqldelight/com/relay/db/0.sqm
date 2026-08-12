@@ -1,0 +1,34 @@
+CREATE TABLE dialog (
+    id               TEXT    NOT NULL PRIMARY KEY,
+    type             TEXT    NOT NULL,
+    title            TEXT,
+    last_message_at  INTEGER,
+    unread_count     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE message (
+    local_id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    server_id      TEXT    UNIQUE,
+    client_msg_id  TEXT    UNIQUE,
+    dialog_id      TEXT    NOT NULL,
+    sender_id      TEXT    NOT NULL,
+    text           TEXT    NOT NULL,
+    reply_to       TEXT,
+    created_at     INTEGER NOT NULL,
+    state          TEXT    NOT NULL,
+    fail_reason    TEXT,
+    attempt_count  INTEGER NOT NULL DEFAULT 0,
+    next_retry_at  INTEGER,
+    first_attempt_at INTEGER
+);
+
+CREATE TABLE sync_state (
+    dialog_id            TEXT NOT NULL PRIMARY KEY,
+    newest_synced_id     TEXT,
+    oldest_loaded_id     TEXT,
+    has_more_history     INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX idx_message_dialog ON message(dialog_id, created_at DESC, local_id DESC);
+
+CREATE INDEX idx_message_outbox ON message(state, next_retry_at) WHERE state = 'PENDING';

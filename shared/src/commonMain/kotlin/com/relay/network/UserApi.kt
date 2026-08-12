@@ -32,6 +32,16 @@ data class UserSummaryResponse(
 )
 
 @Serializable
+data class UserProfileResponse(
+    val id: String,
+    val email: String,
+    val firstName: String,
+    val lastName: String,
+    val avatarUrl: String? = null,
+    val createdAt: String? = null
+)
+
+@Serializable
 data class UserSearchResultResponse(
     val user: UserSummaryResponse,
     val contact: Boolean
@@ -68,6 +78,8 @@ sealed interface UserApiResult<out T> {
 }
 
 interface UserApi {
+    suspend fun me(): UserApiResult<UserProfileResponse>
+    suspend fun userById(userId: String): UserApiResult<UserSummaryResponse>
     suspend fun search(query: String, page: Int, size: Int): UserApiResult<PagedResponse<UserSearchResultResponse>>
     suspend fun contacts(page: Int, size: Int): UserApiResult<PagedResponse<ContactResponse>>
     suspend fun addContact(userId: String): UserApiResult<ContactResponse>
@@ -80,6 +92,12 @@ class KtorUserApi(
     private val session: SessionManager
 ) : UserApi {
     private val base: String get() = "${config.apiBaseUrl}/api/v1/user"
+
+    override suspend fun me(): UserApiResult<UserProfileResponse> =
+        fetch { token -> http.get("$base/me") { bearerAuth(token) } }
+
+    override suspend fun userById(userId: String): UserApiResult<UserSummaryResponse> =
+        fetch { token -> http.get("$base/$userId") { bearerAuth(token) } }
 
     override suspend fun search(
         query: String,

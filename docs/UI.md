@@ -121,9 +121,16 @@ Use a Compose Multiplatform–compatible navigation library (Navigation Compose 
 sealed interface Route {
     data object DialogList : Route
     data class Chat(val dialogId: String) : Route
+    data object People : Route
+    data object Profile : Route
     data class Call(val callId: String) : Route
 }
 ```
+
+The dialog list is the only top-level screen. Its app bar carries two icon actions — a search glyph
+opening `People` (which lands on the search tab; that screen is a finder first and a contact list
+second) and an account glyph opening `Profile`. **Log out lives on the profile screen, nowhere else.**
+Profile is read-only for now: name, email, member-since, and the logout button. Editing is not built.
 
 Deep links matter: tapping a notification must open the right conversation. Route resolution has to work from a cold start, where the DB may not yet be populated — handle the "dialog not found locally yet" case by fetching it.
 
@@ -174,6 +181,8 @@ Build these as standalone, previewable composables:
 | `Composer` | Text field, send button, draft persistence |
 | `DialogRow` | Avatar, title, last message, unread badge, timestamp |
 | `DialogList` | `LazyColumn` of `DialogRow` |
+| `Avatar` | Initials in a circle; `size` and `textStyle` are parameters |
+| `SearchGlyph` / `AccountGlyph` | App-bar icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
 | `ConnectionStrip` | Delayed reconnect indicator |
 | `EmptyState` | No dialogs / no messages |
 | `RetryChip` | Attached to `FAILED` messages |
