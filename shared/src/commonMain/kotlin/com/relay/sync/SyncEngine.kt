@@ -148,7 +148,7 @@ class SyncEngine(
                 store.upsertDialog(
                     id = dialog.dialogId,
                     type = dialog.type,
-                    title = dialog.title,
+                    title = null,
                     lastMessageAt = dialog.lastMessageAt?.let { isoToEpochMillisOrNull(it) }
                 )
             }

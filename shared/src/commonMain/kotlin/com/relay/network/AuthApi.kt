@@ -87,7 +87,11 @@ class KtorAuthApi(
             return AuthApiResult.Unreachable(e.message ?: e::class.simpleName ?: "network failure")
         }
         return when {
-            response.status.isSuccess() -> AuthApiResult.Success(response.body())
+            response.status.isSuccess() -> try {
+                AuthApiResult.Success(response.body())
+            } catch (e: Exception) { // allow: broad-catch a token body that does not match the expected shape surfaces as a serialization or engine exception with no common KMP supertype; all of them mean the response was unusable
+                AuthApiResult.Unreachable("unreadable response: ${e.message ?: e::class.simpleName}")
+            }
             response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden ->
                 AuthApiResult.InvalidCredentials(response.status.value)
             else -> AuthApiResult.Rejected(response.status.value, response.bodyTextSafely())

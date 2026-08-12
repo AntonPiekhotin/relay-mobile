@@ -182,6 +182,60 @@ the sending connection gets an `ack` instead, and is excluded from this fan-out 
 than showing a generic error. It is **nullable**: an error raised before the envelope `id` could be
 read (unparseable JSON) arrives with `ref_id: null` and cannot be attributed to a pending send.
 
+#### `message.read` (C→S)
+
+```json
+{
+  "v": 1, "type": "message.read",
+  "id": "<any UUID, for error correlation>",
+  "ts": 1730000000000,
+  "payload": { "dialog_id": "...", "up_to_message_id": "..." }
+}
+```
+
+**A position, not a message.** Everything in the dialog up to and including `up_to_message_id`
+becomes read. Opening a chat with fifty unread messages is **one** frame naming the newest of them,
+never fifty frames.
+
+- Both payload fields are mandatory and must be non-blank, or the frame yields `BAD_FRAME`. The
+  envelope `id` is required too, but only so a rejection can name the offending frame — a read
+  carries no idempotency key, because the position *is* the idempotency.
+- **Never send a reader id.** The reader comes from the authenticated socket.
+- **Safe to repeat and safe to send out of order.** The cursor only ever moves forward, so a retry
+  changes nothing and a frame naming an older position is discarded server-side. Resending after a
+  reconnect is the intended way to flush reads taken while offline.
+- `up_to_message_id` must name a message **in that dialog**. One from another conversation is
+  discarded.
+- **Nothing is returned to the sending device** — no ack, and no error even if the frame could not be
+  queued. Treat the local unread count as cleared optimistically.
+
+#### `message.read` (S→C)
+
+```json
+{
+  "v": 1, "type": "message.read", "ts": 1730000000000,
+  "payload": {
+    "dialog_id": "...", "user_id": "...",
+    "up_to_message_id": "...", "read_at": "2026-07-26T10:00:00Z"
+  }
+}
+```
+
+Same type as the inbound frame; the direction decides the shape. Outbound adds `user_id`, because it
+has to say *whose* cursor moved.
+
+**Two things to do with it, and clients usually forget the second.** When `user_id` is somebody else,
+draw read ticks on your own messages up to that position. When `user_id` is **you**, this is another
+of your devices reporting a read — clear the unread badge for that dialog. The device that sent the
+read is excluded from this fan-out and must not wait for it.
+
+`read_at` is the `created_at` of the message at the cursor, not the time the read happened. It is a
+position on the same axis as `created_at`, which is what makes "is my message read" a comparison
+rather than a lookup.
+
+Delivered on the same ordering domain as `message.new` for that dialog, so a receipt can never arrive
+before the message it acknowledges.
+
 #### `ping` / `pong`
 
 Client sends `ping` every 30s with an empty payload; server replies `pong` with `ref_id` echoing
@@ -299,38 +353,35 @@ direct path cannot be found, and never through any service, queue, or database. 
 
 ## 5. REST endpoints
 
-> ### ⚠ None of this exists yet
+> ### History, the dialog list, and catch-up now exist
 >
-> **There is no client-facing message history API.** The gateway now routes `/api/v1/message/**`,
-> and exactly one client-facing endpoint lives behind it: `POST /api/v1/message/dialogs` (§5.4),
-> which opens the direct dialog with another user. That endpoint is what makes a conversation
-> reachable at all — before it, a client could find a person but never obtain a dialog id.
+> **This section used to open with a warning that none of it was built. That is no longer true.**
+> `GET /api/v1/message/dialogs`, `GET /api/v1/message/dialogs/{id}`, and
+> `GET /api/v1/message/dialogs/{id}/messages` with both `before` and `after` cursors are implemented
+> and routed, alongside the `POST /api/v1/message/dialogs` that opens a conversation (§5.4).
 >
-> Everything else is still missing: no history endpoint, no dialog list, no cursor pagination, and
-> no REST fallback send. `POST /internal/api/v1/messages` remains `/internal`-only.
+> That closes the gap this section was written around. The architecture permits delivery to be lossy
+> *because* the client can fetch what it missed over REST (§7) — the `after` cursor is that fetch, so
+> step 3 of the reconnect sequence is now implementable, and a client that reinstalls or switches
+> device is no longer looking at the only surviving copy of its own history.
 >
-> **This is the largest gap between this document and the running system, and it is load-bearing.**
-> The architecture permits delivery to be lossy *because* the client can fetch the gap over REST
-> (§7). With no history endpoint, a frame missed while offline is currently unrecoverable by the
-> client. Building this is the next milestone.
+> **One thing here is still a target: `POST /api/v1/message/messages`, the REST fallback send (§5.2).**
+> `POST /internal/api/v1/messages` remains `/internal`-only, so the socket is still the only way a
+> client sends. A backgrounded or mid-reconnect client has to queue locally and flush on reconnect.
 >
-> The rest of §5 is therefore the **target contract**, not a description of today. It is specified
-> here so clients can be written against it and so the eventual implementation has one shape to
-> hit. Everything below is normative-when-built.
->
-> **The call, profile, contact, and open-dialog endpoints are the exception — those exist.**
-> §5.0, §5.3 and §5.4 describe running code, not a target.
+> **Read state is implemented but lives in §4.1, not here** — it is a pair of `message.read` frames
+> plus `unreadCount` on the dialog list, with no REST endpoint of its own.
 
 All routed through the api-gateway as `/api/v1/{service}/**` — the same convention every existing
-service already follows — and all requiring `Authorization: Bearer`. The planned message endpoints
-therefore live under `/api/v1/message/**`.
+service already follows — and all requiring `Authorization: Bearer`. The message endpoints therefore
+live under `/api/v1/message/**`.
 
 | Method | Path | Purpose | Status |
 |---|---|---|---|
-| `GET` | `/api/v1/message/dialogs` | List the caller's dialogs | Planned |
-| `GET` | `/api/v1/message/dialogs/{id}` | Dialog metadata and participants | Planned |
-| `GET` | `/api/v1/message/dialogs/{id}/messages?before=<cursor>&limit=50` | History, newest-first | Planned |
-| `GET` | `/api/v1/message/dialogs/{id}/messages?after=<cursor>&limit=100` | Catch-up after reconnect | Planned |
+| `GET` | `/api/v1/message/dialogs` | List the caller's dialogs | **Implemented** |
+| `GET` | `/api/v1/message/dialogs/{id}` | Dialog metadata and participants | **Implemented** |
+| `GET` | `/api/v1/message/dialogs/{id}/messages?before=<cursor>&limit=50` | History, newest-first | **Implemented** |
+| `GET` | `/api/v1/message/dialogs/{id}/messages?after=<cursor>&limit=100` | Catch-up after reconnect | **Implemented** |
 | `POST` | `/api/v1/message/dialogs` | Open the direct dialog with one other user | **Implemented** |
 | `POST` | `/api/v1/message/messages` | REST fallback send | Internal only today |
 | `GET` | `/api/v1/call/ice-servers` | STUN/TURN servers with short-lived credentials | **Implemented** |
@@ -348,10 +399,11 @@ therefore live under `/api/v1/message/**`.
 | `PUT` | `/api/v1/notification/device-tokens` | Register this device for push | **Implemented** |
 | `DELETE` | `/api/v1/notification/device-tokens/{deviceId}` | Unregister it | **Implemented** |
 
-> **Implemented REST bodies are camelCase, unlike frames.** The snake_case rule in §3 is about the
-> WebSocket payload, which has its own mapper for exactly that reason. The device-token and call
-> endpoints use the default camelCase mapper, and the snake_case examples further down this section
-> describe endpoints that do not exist yet. Match the style of the endpoint you are calling.
+> **REST bodies are camelCase, frames are snake_case.** The snake_case rule in §3 is about the
+> WebSocket payload, which has its own mapper for exactly that reason. **Every** REST endpoint in this
+> table — including the message endpoints — uses the default camelCase mapper. Earlier drafts of §5.1
+> showed the message endpoints in snake_case; that was never built and the shapes below are the real
+> ones. So `dialogId` over HTTP and `dialog_id` on the socket, for the same field.
 
 ### 5.0 Call endpoints
 
@@ -388,60 +440,99 @@ GET /api/v1/call/calls?before=<callId>&limit=50
 value for the following page and is `null` on the last one. `status` is one of `ringing`, `answered`,
 `rejected`, `missed`, `ended`.
 
-### 5.1 Pagination is cursor-based, never offset
+### 5.1 The dialog list and history
 
 ```
 GET /api/v1/message/dialogs/{id}/messages?limit=50                    → newest 50
 GET /api/v1/message/dialogs/{id}/messages?before=<oldestId>&limit=50  → next page back
+GET /api/v1/message/dialogs/{id}/messages?after=<newestId>&limit=100  → the gap since <newestId>
 ```
 
 **Never use offset pagination.** New messages constantly insert at the head, so offsets silently skip rows.
-
-Target response shapes, so both sides are written against the same contract:
 
 ```
 GET /api/v1/message/dialogs
 
 200 → { "dialogs": [
-  { "dialog_id": "...", "type": "direct", "title": null,
-    "last_message_at": "2026-07-26T10:00:00Z" }
+  { "dialogId": "...", "type": "direct",
+    "participantIds": ["<caller>", "<peer>"],
+    "lastMessageAt": "2026-07-26T10:00:00Z",
+    "unreadCount": 3,
+    "createdAt": "2026-07-26T09:00:00Z" }
 ] }
+
+GET /api/v1/message/dialogs/{id}          → one element of the same shape, not wrapped
 
 GET /api/v1/message/dialogs/{id}/messages
 
 200 → { "messages": [
-  { "message_id": "...", "dialog_id": "...", "sender_id": "...",
-    "text": "...", "created_at": "2026-07-26T10:00:00Z", "client_msg_id": "550e8400-..." }
-] }
+  { "messageId": "...", "dialogId": "...", "senderId": "...",
+    "text": "...", "createdAt": "2026-07-26T10:00:00Z", "clientMsgId": "550e8400-..." }
+  ],
+  "nextCursor": "<messageId>" }
 ```
+
+**The dialog list**
+
+- **Ordered by `lastMessageAt`, most recent first**, and **unpaginated** — the whole list comes back
+  in one response. Safe today because a direct dialog only exists where somebody opened a
+  conversation; it will need a cursor when group dialogs land.
+- `lastMessageAt` is **null for a dialog nobody has written in yet**, and those sort last. Never is
+  not the same as long ago.
+- **There is no `title` and no last-message preview.** A direct dialog is named by its members:
+  subtract yourself from `participantIds` and resolve the peer through `GET /api/v1/user/{id}`.
+  message-service holds no names, and an earlier draft of this section listing `title` was wrong.
+- `unreadCount` is **relative to the caller** — messages from other people past your own read cursor
+  (§4.1). The same dialog has a different count for each participant, and your own messages never
+  count.
+- Note the id key is **`dialogId`** here, while `POST /dialogs` (§5.4) answers with **`id`**. That
+  endpoint shipped first and its shape is already a contract, so the two were not unified. Same
+  value, two names, depending on which endpoint you called.
+
+**History**
 
 - `before` pages are **newest-first** (descending); `after` pages are **oldest-first** (ascending).
   Both cursors are exclusive of the message they name; a client takes the last element of each page
   as the next cursor either way.
-- `client_msg_id` is set only on the caller's own messages. It lets a client merge a history row
-  with a send that is still `PENDING` locally instead of inserting a duplicate — the same merge rule
-  as `message.new`.
+- **Both cursors are message ids** you already hold, not opaque tokens. `nextCursor` is one too, and
+  is `null` on the last page. A cursor naming a message in a *different* dialog is a `400`, not an
+  empty page.
+- **Passing both `before` and `after` is a `400`.** They are opposite directions from a position.
+- `limit` defaults to 50 and is **clamped to 100**, not rejected.
+- `createdAt`, not `sentAt` — matching `ack` and `message.new`, so a history row and a frame for the
+  same message carry the same field name.
+- `clientMsgId` is set only on the caller's own messages and is **absent from other people's**. It
+  lets a client merge a history row with a send that is still `PENDING` locally instead of inserting
+  a duplicate — the same merge rule as `message.new`.
+- A dialog the caller is not in is a **`404`, not a `403`**, on both history and the single-dialog
+  lookup. A `403` would confirm that a guessed dialog id names a real conversation.
 
-### 5.2 REST fallback send
+### 5.2 REST fallback send — NOT IMPLEMENTED
+
+**The only part of §5 that is still a target.** There is no client-facing send over HTTP; the socket
+is the only way a client sends today. `POST /internal/api/v1/messages` exists but is `/internal`, so
+it is not routed by the api-gateway.
+
+Until it ships, a client with no socket queues locally and flushes on reconnect (§7 step 5).
+
+The intended shape, camelCase like every other implemented endpoint:
 
 ```
 POST /api/v1/message/messages
-{ "client_msg_id": "550e8400-...", "dialog_id": "...", "text": "..." }
+{ "clientMsgId": "550e8400-...", "dialogId": "...", "text": "..." }
 
-200 → { "message_id": "...", "client_msg_id": "...", "created_at": "2026-07-26T10:00:00Z" }
+200 → { "messageId": "...", "clientMsgId": "...", "createdAt": "2026-07-26T10:00:00Z" }
 ```
 
-Same semantics as the socket path — same `client_msg_id`, same idempotency, same convergence on
-the one persistence path. Use when the socket is not connected (cold start, mid-reconnect,
-backgrounded).
+Same semantics as the socket path — same `clientMsgId`, same idempotency, same convergence on
+the one persistence path.
 
 ### 5.3 Profile and contact endpoints
 
 **These are implemented and routed today.** They are the only client-facing surface for finding
-another person. Note what is *not* here: **there is no client-facing way to create a dialog.**
-message-service's `POST /internal/api/v1/dialogs` is `/internal`, so a client can find a user and
-add them as a contact but cannot open a conversation with them. Until dialog creation is routed, a
-"message this person" affordance has nothing to call — do not build one that pretends otherwise.
+another person. Opening a conversation with whoever you found is **not** here — that is
+`POST /api/v1/message/dialogs` (§5.4). Earlier drafts of this paragraph said no client-facing dialog
+creation existed; it does, and a "message this person" affordance calls §5.4 with the id found here.
 
 Every endpoint below requires `Authorization: Bearer`. **Bodies are camelCase**, like the other
 implemented REST surfaces and unlike the snake_case frames of §3–§4. Every "my" endpoint resolves
@@ -621,14 +712,20 @@ The socket **will** drop — tunnels, backgrounding, network switches. Recovery 
 
 1. Reconnect and authenticate at handshake.
 2. Wait for `session.connected` — it confirms the handshake resolved to the expected identity.
-3. For each dialog with local state, call `GET /api/v1/message/dialogs/{id}/messages?after=<lastKnownServerId>`.
-4. Merge results, deduplicating on `message_id`.
-5. Flush the outbox — resend anything still `PENDING`.
+3. Call `GET /api/v1/message/dialogs` to pick up conversations opened while you were away, and their
+   unread counts.
+4. For each dialog with local state, call
+   `GET /api/v1/message/dialogs/{id}/messages?after=<lastKnownServerId>`, paging until a page comes
+   back short. Merge results, deduplicating on `messageId`.
+5. Flush the outbox — resend anything still `PENDING`, and resend `message.read` for any read taken
+   while offline.
 
 **The server buffers nothing for offline clients.** There is no replay, no server-side outbox, no "missed messages" frame. Catch-up over REST is the only mechanism, and it is sufficient because the database is authoritative.
 
-⚠ **Step 3 is not implementable today** — the history endpoint does not exist (§5). Steps 1, 2 and
-5 work now; a message that arrived while the socket was down stays unseen until it does.
+**All five steps work now.** Step 3 is what makes a conversation somebody else started visible at
+all — without it, a dialog id only ever existed on the device that opened it. Step 4 is the
+correctness mechanism the whole delivery design leans on: a frame missed while the socket was down is
+recovered here, which is why the gateway is allowed to drop it.
 
 ---
 
@@ -686,7 +783,7 @@ connection, not a frame. `RATE_LIMITED` and `PAYLOAD_TOO_LARGE` do not exist eit
 |---|---|---|
 | Outbound buffer per connection | 256 frames | **Yes** — overflow closes the socket with 1013 |
 | Heartbeat interval | 30s | Client-driven; server never initiates |
-| History page size | 50 (max 100) | Yes, by the REST API |
+| History page size | 50 (max 100) | **Yes** — clamped by the REST API, never rejected |
 | Max frame size | 64 KB (intended) | **No** |
 | Rate limit | ~30 frames/sec sustained (intended) | **No** |
 | Server idle timeout | 90s (intended) | **No** |

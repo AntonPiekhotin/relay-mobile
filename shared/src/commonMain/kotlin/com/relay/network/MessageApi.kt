@@ -16,62 +16,63 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class WireMessage(
-    @SerialName("message_id") val messageId: String,
-    @SerialName("dialog_id") val dialogId: String,
-    @SerialName("sender_id") val senderId: String,
-    @SerialName("text") val text: String,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("client_msg_id") val clientMsgId: String? = null
+    val messageId: String,
+    val dialogId: String,
+    val senderId: String,
+    val text: String,
+    val createdAt: String,
+    val clientMsgId: String? = null
 )
 
 @Serializable
 data class WireDialog(
-    @SerialName("dialog_id") val dialogId: String,
-    @SerialName("type") val type: String,
-    @SerialName("title") val title: String? = null,
-    @SerialName("last_message_at") val lastMessageAt: String? = null
+    val dialogId: String,
+    val type: String,
+    val participantIds: List<String> = emptyList(),
+    val lastMessageAt: String? = null,
+    val unreadCount: Long = 0
 )
 
 @Serializable
 data class MessagePageResponse(
-    @SerialName("messages") val messages: List<WireMessage>
+    val messages: List<WireMessage>,
+    val nextCursor: String? = null
 )
 
 @Serializable
 data class DialogListResponse(
-    @SerialName("dialogs") val dialogs: List<WireDialog>
+    val dialogs: List<WireDialog>
 )
 
 @Serializable
 data class FallbackSendRequest(
-    @SerialName("client_msg_id") val clientMsgId: String,
-    @SerialName("dialog_id") val dialogId: String,
-    @SerialName("text") val text: String
+    val clientMsgId: String,
+    val dialogId: String,
+    val text: String
 )
 
 @Serializable
 data class OpenDirectDialogRequest(
-    @SerialName("peerId") val peerId: String
+    val peerId: String
 )
 
 @Serializable
 data class OpenedDialogResponse(
-    @SerialName("id") val id: String,
-    @SerialName("type") val type: String,
-    @SerialName("participantIds") val participantIds: List<String> = emptyList(),
-    @SerialName("createdAt") val createdAt: String? = null
+    val id: String,
+    val type: String,
+    val participantIds: List<String> = emptyList(),
+    val createdAt: String? = null
 )
 
 @Serializable
 data class FallbackSendResponse(
-    @SerialName("message_id") val messageId: String,
-    @SerialName("client_msg_id") val clientMsgId: String,
-    @SerialName("created_at") val createdAt: String
+    val messageId: String,
+    val clientMsgId: String,
+    val createdAt: String
 )
 
 sealed interface MessageApiResult<out T> {
@@ -182,7 +183,13 @@ class KtorMessageApi(
             }
         }
         return when {
-            response.status.isSuccess() -> MessageApiResult.Success(response.body())
+            response.status.isSuccess() -> try {
+                MessageApiResult.Success(response.body())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) { // allow: broad-catch a body that does not match the expected shape surfaces as a serialization or engine exception with no common KMP supertype; all of them mean the response was unusable, and a contract drift must degrade to a failed sync rather than kill the caller's coroutine
+                MessageApiResult.Unavailable("unreadable response: ${e.message ?: e::class.simpleName}")
+            }
             isTransientStatus(response.status) -> MessageApiResult.Unavailable("HTTP ${response.status.value}")
             else -> MessageApiResult.Rejected(response.status.value)
         }
