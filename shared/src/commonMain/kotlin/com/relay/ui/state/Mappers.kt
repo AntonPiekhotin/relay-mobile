@@ -54,12 +54,7 @@ fun List<DialogSummary>.toDialogUi(selfId: String?, nowMillis: Long): List<Dialo
     }
 
 fun UserSummary.toPersonUi(isContact: Boolean): PersonUi =
-    PersonUi(
-        id = id,
-        name = displayName,
-        email = email,
-        isContact = isContact
-    )
+    PersonUi(id = id, name = displayName, isContact = isContact)
 
 fun UserProfile.toProfileUi(): ProfileUi =
     ProfileUi(

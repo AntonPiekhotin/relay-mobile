@@ -2,7 +2,6 @@ package com.relay
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -26,7 +25,7 @@ fun App() {
             val busy by viewModel.busy.collectAsStateWithLifecycle()
             val error by viewModel.error.collectAsStateWithLifecycle()
 
-            Box(modifier = Modifier.fillMaxSize().safeContentPadding()) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 when (authState) {
                     is AuthState.Unknown -> CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center)

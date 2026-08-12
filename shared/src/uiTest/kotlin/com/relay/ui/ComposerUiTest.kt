@@ -5,7 +5,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
@@ -33,6 +35,15 @@ class ComposerUiTest {
             RelayTheme { Composer(draft = "   ", onDraftChange = {}, onSend = {}) }
         }
         onNodeWithTag(COMPOSER_SEND_TAG).assertIsNotEnabled()
+    }
+
+    @Test
+    fun sendIsAnIconRatherThanALabelledButton() = runComposeUiTest {
+        setContent {
+            RelayTheme { Composer(draft = "hello", onDraftChange = {}, onSend = {}) }
+        }
+        onNodeWithText("Send").assertDoesNotExist()
+        onNodeWithContentDescription("Send").assertIsDisplayed()
     }
 
     @Test

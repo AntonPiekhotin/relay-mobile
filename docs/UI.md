@@ -132,7 +132,32 @@ opening `People` (which lands on the search tab; that screen is a finder first a
 second) and an account glyph opening `Profile`. **Log out lives on the profile screen, nowhere else.**
 Profile is read-only for now: name, email, member-since, and the logout button. Editing is not built.
 
+**Going back.** Every screen below the dialog list gets a `BackButton` (arrow glyph) *and* is wrapped
+in `SwipeBackBox` in the nav host, which drags the screen with a swipe that starts within 24 dp of
+the left edge and pops once it passes 30% of the width. It is plain Compose pointer input, so it
+behaves the same on both platforms and does not replace the platform gestures: Android's system back
+and iOS's predictive back still reach `NavHost` on their own. Because two paths can fire for one
+gesture, **every navigation call goes through `entry.ifResumed { }`** — a pop or navigate from an
+entry that is no longer resumed is dropped, which is what stops a double pop and a double-tapped row
+from opening two chats.
+
 Deep links matter: tapping a notification must open the right conversation. Route resolution has to work from a cold start, where the DB may not yet be populated — handle the "dialog not found locally yet" case by fetching it.
+
+---
+
+## 5a. Window insets
+
+**The app draws edge to edge; every screen owns its own insets.** `App()` applies no padding of its
+own — `Scaffold` handles it: `TopAppBar` paints under the status bar and insets its content, and the
+body `PaddingValues` already account for the system bars. `LoginScreen` is the one screen without a
+`Scaffold`, so it carries `safeDrawingPadding()` itself.
+
+A bar that should reach the physical edge goes in the `bottomBar` slot and pads *inside* its own
+surface, never outside it — that is why the chat composer sits in `bottomBar` and its `Row` (not its
+`Surface`) carries `windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))`. The
+tinted bar then runs to the bottom of the display while its content clears the home indicator, and
+the same padding lifts it over the keyboard. **Do not add `imePadding()` to a screen that already
+does this** — the composer would be pushed up twice.
 
 ---
 
@@ -178,11 +203,14 @@ Build these as standalone, previewable composables:
 |---|---|
 | `MessageBubble` | Own vs. other, status icon, timestamp, reply preview |
 | `MessageList` | `LazyColumn`, reverse layout, pagination trigger |
-| `Composer` | Text field, send button, draft persistence |
+| `Composer` | Pill text field and a filled icon send button, in the chat's `bottomBar` |
 | `DialogRow` | Avatar, title, last message, unread badge, timestamp |
 | `DialogList` | `LazyColumn` of `DialogRow` |
 | `Avatar` | Initials in a circle; `size` and `textStyle` are parameters |
-| `SearchGlyph` / `AccountGlyph` | App-bar icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
+| `SearchGlyph` / `AccountGlyph` / `BackGlyph` | App-bar icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
+| `BackButton` | `IconButton` + `BackGlyph`, used as every sub-screen's `navigationIcon` |
+| `PersonRow` | Avatar and name only; the row itself opens the chat, the trailing button only adds or removes the contact |
+| `SwipeBackBox` | Left-edge drag-to-go-back wrapper applied in the nav host |
 | `ConnectionStrip` | Delayed reconnect indicator |
 | `EmptyState` | No dialogs / no messages |
 | `RetryChip` | Attached to `FAILED` messages |

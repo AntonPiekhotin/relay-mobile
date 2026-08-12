@@ -15,13 +15,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.relay.network.MIN_SEARCH_LENGTH
+import com.relay.ui.components.BackButton
 import com.relay.ui.components.EmptyState
 import com.relay.ui.components.PersonRow
 import com.relay.ui.state.PeopleState
@@ -47,7 +47,7 @@ fun PeopleScreen(
         topBar = {
             TopAppBar(
                 title = { Text("People") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { BackButton(onBack = onBack) }
             )
         }
     ) { padding ->

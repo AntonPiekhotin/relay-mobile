@@ -25,7 +25,6 @@ data class DialogUi(
 data class PersonUi(
     val id: String,
     val name: String,
-    val email: String,
     val isContact: Boolean
 )
 

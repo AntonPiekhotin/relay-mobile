@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.relay.ui.components.Avatar
+import com.relay.ui.components.BackButton
 import com.relay.ui.components.LARGE_AVATAR_SIZE
 import com.relay.ui.state.ProfileState
 import com.relay.ui.state.ProfileUi
@@ -42,7 +43,7 @@ fun ProfileScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { BackButton(onBack = onBack) }
             )
         }
     ) { padding ->

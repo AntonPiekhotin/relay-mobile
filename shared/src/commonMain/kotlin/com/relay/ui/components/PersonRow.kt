@@ -1,7 +1,7 @@
 package com.relay.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,35 +27,27 @@ fun PersonRow(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = !busy) { onOpenChat(person.id) }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Avatar(label = person.name)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = person.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = person.email,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = person.name,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
         if (busy) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp))
+        } else if (person.isContact) {
+            TextButton(onClick = { onRemoveContact(person.id) }) { Text("Remove") }
         } else {
-            TextButton(onClick = { onOpenChat(person.id) }) { Text("Message") }
-            if (person.isContact) {
-                TextButton(onClick = { onRemoveContact(person.id) }) { Text("Remove") }
-            } else {
-                TextButton(onClick = { onAddContact(person.id) }) { Text("Add") }
-            }
+            TextButton(onClick = { onAddContact(person.id) }) { Text("Add") }
         }
     }
 }

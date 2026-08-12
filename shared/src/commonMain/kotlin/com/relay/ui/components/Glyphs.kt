@@ -8,7 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +36,64 @@ fun SearchGlyph(
             end = Offset(size.width * 0.88f, size.height * 0.88f),
             strokeWidth = stroke,
             cap = StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+fun BackGlyph(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    Canvas(modifier.size(GLYPH_SIZE).describedAs(contentDescription)) {
+        val stroke = size.minDimension * STROKE_RATIO
+        val tip = Offset(size.width * 0.22f, size.height * 0.5f)
+        drawLine(
+            color = tint,
+            start = tip,
+            end = Offset(size.width * 0.82f, size.height * 0.5f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        val head = Path().apply {
+            moveTo(size.width * 0.48f, size.height * 0.24f)
+            lineTo(tip.x, tip.y)
+            lineTo(size.width * 0.48f, size.height * 0.76f)
+        }
+        drawPath(
+            path = head,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+
+@Composable
+fun SendGlyph(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    Canvas(modifier.size(GLYPH_SIZE).describedAs(contentDescription)) {
+        val stroke = size.minDimension * STROKE_RATIO
+        val tip = Offset(size.width * 0.5f, size.height * 0.24f)
+        drawLine(
+            color = tint,
+            start = Offset(size.width * 0.5f, size.height * 0.78f),
+            end = tip,
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        val head = Path().apply {
+            moveTo(size.width * 0.26f, size.height * 0.48f)
+            lineTo(tip.x, tip.y)
+            lineTo(size.width * 0.74f, size.height * 0.48f)
+        }
+        drawPath(
+            path = head,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
     }
 }

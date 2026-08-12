@@ -60,7 +60,7 @@ fun DialogListScreen(
                 }
                 state.isLoaded -> EmptyState(
                     title = "No conversations",
-                    detail = "Tap the search icon, find someone, and tap Message to start one."
+                    detail = "Tap the search icon, find someone, and tap their name to start one."
                 )
                 else -> Unit
             }

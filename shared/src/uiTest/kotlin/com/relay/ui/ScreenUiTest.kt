@@ -1,15 +1,21 @@
 package com.relay.ui
 
+import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.swipeRight
 import com.relay.model.MessageState
+import com.relay.ui.components.BACK_BUTTON_TAG
 import com.relay.ui.components.CONNECTION_STRIP_TAG
 import com.relay.ui.components.ConnectionStrip
+import com.relay.ui.components.SWIPE_BACK_TAG
+import com.relay.ui.components.SwipeBackBox
 import com.relay.ui.chat.CHAT_ERROR_TAG
 import com.relay.ui.chat.ChatScreen
 import com.relay.ui.dialogs.DIALOGS_PROFILE_TAG
@@ -44,7 +50,6 @@ private fun dialogUi(id: String, title: String, preview: String) = DialogUi(
 private fun personUi(id: String, name: String, isContact: Boolean) = PersonUi(
     id = id,
     name = name,
-    email = "$id@relay.dev",
     isContact = isContact
 )
 
@@ -167,6 +172,34 @@ class ScreenUiTest {
     }
 
     @Test
+    fun tappingAFoundPersonOpensTheChatAndNoEmailIsListed() = runComposeUiTest {
+        val opened = mutableListOf<String>()
+        setContent {
+            RelayTheme {
+                PeopleScreen(
+                    state = PeopleState(
+                        tab = PeopleTab.SEARCH,
+                        query = "ada",
+                        hasSearched = true,
+                        results = listOf(personUi("a", "Ada Lovelace", isContact = false))
+                    ),
+                    onTabChange = {},
+                    onQueryChange = {},
+                    onOpenChat = { opened += it },
+                    onAddContact = {},
+                    onRemoveContact = {},
+                    onBack = {}
+                )
+            }
+        }
+        onNodeWithText("Message").assertDoesNotExist()
+        onNodeWithText("a@relay.dev").assertDoesNotExist()
+        onNodeWithText("Ada Lovelace").assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(listOf("a"), opened)
+    }
+
+    @Test
     fun aSendFailureIsShownAboveTheComposerAndCanBeDismissed() = runComposeUiTest {
         val dismissed = mutableListOf<Unit>()
         setContent {
@@ -277,6 +310,53 @@ class ScreenUiTest {
         onNodeWithText("Try again").assertIsDisplayed().performClick()
         waitForIdle()
         assertEquals(1, retried.size)
+    }
+
+    @Test
+    fun theBackAffordanceIsAnIconAndReportsTheTap() = runComposeUiTest {
+        val back = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                ProfileScreen(
+                    state = ProfileState(error = "offline"),
+                    onBack = { back += Unit },
+                    onRetry = {},
+                    onLogout = {}
+                )
+            }
+        }
+        onNodeWithText("Back").assertDoesNotExist()
+        onNodeWithTag(BACK_BUTTON_TAG).assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(1, back.size)
+    }
+
+    @Test
+    fun swipingInFromTheLeftEdgeGoesBack() = runComposeUiTest {
+        val back = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                SwipeBackBox(onBack = { back += Unit }) { Text("a screen") }
+            }
+        }
+        onNodeWithTag(SWIPE_BACK_TAG).performTouchInput { swipeRight() }
+        waitUntil { back.isNotEmpty() }
+        assertEquals(1, back.size)
+    }
+
+    @Test
+    fun aSwipeThatDoesNotStartAtTheEdgeIsIgnored() = runComposeUiTest {
+        val back = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                SwipeBackBox(onBack = { back += Unit }) { Text("a screen") }
+            }
+        }
+        onNodeWithTag(SWIPE_BACK_TAG).performTouchInput {
+            swipeRight(startX = centerX, endX = right)
+        }
+        waitForIdle()
+        assertEquals(emptyList(), back)
     }
 
     @Test

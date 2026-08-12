@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.relay.ui.components.BackButton
 import com.relay.ui.components.Composer
 import com.relay.ui.components.ConnectionStrip
 import com.relay.ui.components.EmptyState
@@ -43,12 +43,20 @@ fun ChatScreen(
     listState: LazyListState = rememberLazyListState()
 ) {
     Scaffold(
-        modifier = modifier.fillMaxSize().imePadding(),
+        modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = { Text(state.title) },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                navigationIcon = { BackButton(onBack = onBack) }
             )
+        },
+        bottomBar = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (state.error != null) {
+                    SendErrorBanner(message = state.error, onDismiss = onDismissError)
+                }
+                Composer(draft = state.draft, onDraftChange = onDraftChange, onSend = onSend)
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -57,7 +65,7 @@ fun ChatScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     EmptyState(
                         title = "No messages yet",
-                        detail = "Anything you send is stored locally first and delivered when the socket allows."
+                        detail = "Write your first message"
                     )
                 }
             } else {
@@ -71,10 +79,6 @@ fun ChatScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
-            if (state.error != null) {
-                SendErrorBanner(message = state.error, onDismiss = onDismissError)
-            }
-            Composer(draft = state.draft, onDraftChange = onDraftChange, onSend = onSend)
         }
     }
 }
