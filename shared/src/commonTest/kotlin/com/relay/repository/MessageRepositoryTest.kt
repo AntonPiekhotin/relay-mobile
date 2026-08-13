@@ -11,6 +11,7 @@ import com.relay.network.OpenedDialogResponse
 import com.relay.network.RegisterRequest
 import com.relay.network.TokenResponse
 import com.relay.sync.Outbox
+import com.relay.sync.ReadReceipts
 import com.relay.auth.StoredTokens
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
@@ -60,7 +61,8 @@ private class RepoHarness(scope: TestScope) {
     )
     val tokenStore = FakeTokenStore()
     val session = SessionManager(StubAuthApi(), tokenStore)
-    val repository = MessageRepositoryImpl(store, outbox, api, session)
+    val readReceipts = ReadReceipts(store, socket)
+    val repository = MessageRepositoryImpl(store, outbox, api, session, readReceipts)
 
     suspend fun logIn(userId: String = "user-1") {
         tokenStore.save(

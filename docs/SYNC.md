@@ -14,6 +14,7 @@ The sync engine owns everything between the network and the database:
 4. Apply inbound `message.new` — deduplicate and insert
 5. Run catch-up after every reconnect
 6. Track sync cursors per dialog
+7. Move read cursors — report ours, apply the ones the server sends back
 
 It never touches the UI. It only writes to the DB; the UI notices because it observes the DB.
 
@@ -30,8 +31,12 @@ CREATE TABLE dialog (
     type             TEXT    NOT NULL,          -- 'direct' | 'group'
     title            TEXT,                      -- cached peer name, null until resolved
     last_message_at  INTEGER,
-    unread_count     INTEGER NOT NULL DEFAULT 0,
-    peer_id          TEXT                       -- the other participant of a direct dialog
+    unread_count     INTEGER NOT NULL DEFAULT 0, -- dead column, kept for migration continuity
+    peer_id          TEXT,                      -- the other participant of a direct dialog
+    peer_read_at     INTEGER,                   -- peer's read cursor, on the created_at axis
+    self_read_at     INTEGER,                   -- our read cursor, on the created_at axis
+    self_read_id     TEXT,                      -- message id at our cursor, for the outbound frame
+    self_read_sent   INTEGER NOT NULL DEFAULT 1 -- 0 while a read still owes the server a frame
 );
 
 -- message.sq
@@ -105,6 +110,43 @@ sender who is not you; a dialog nobody has written in stays unnamed until the pe
 ```
 
 `PENDING` renders with a clock icon, `SENT` with a checkmark, `FAILED` with a retry affordance. The UI derives all of this from the `state` column — no separate in-memory tracking.
+
+**`READ` is not a state and must never become one.** It is a comparison against `dialog.peer_read_at`
+made at render time — see §3.1. A message row is never rewritten when the peer reads it, so one
+receipt covering fifty messages is one column update, not fifty.
+
+### 3.1 Read receipts
+
+Read state is a **cursor per participant per dialog**, not a flag per message. `docs/PROTOCOL.md` §4.1
+carries both frames; both are implemented on the backend today.
+
+**Outbound.** `ChatViewModel` reports a read whenever the newest message in the open dialog changes.
+`MessageRepository.markRead` resolves the newest message *from the peer* that has a `server_id`,
+`ReadReceipts.mark` writes `self_read_at`/`self_read_id` with `self_read_sent = 0`, and only then
+tries the socket. Same ordering rule as sending: DB first, network second. The write is guarded by
+`COALESCE(self_read_at, 0) < :readAt`, so the cursor only moves forward and a receipt that arrives
+out of order changes nothing.
+
+**Offline.** A read taken while disconnected stays queued as `self_read_sent = 0`. `SyncEngine` calls
+`ReadReceipts.flush()` after every catch-up, which is the intended way to flush reads taken offline —
+the frame carries no idempotency key because the position *is* the idempotency. `markSelfReadSent`
+clears the flag only when `self_read_id` still matches the id that went out, so a newer cursor set
+mid-flush is not silently marked as delivered.
+
+**Inbound.** One frame type, two meanings, and clients routinely forget the second:
+
+| `payload.user_id` | Meaning | Effect |
+|---|---|---|
+| somebody else | they read up to that position | `peer_read_at` advances; our ticks turn double |
+| us | another of our devices read | `self_read_at` advances, `self_read_sent = 1`; badge clears |
+
+`read_at` is the `created_at` of the message at the cursor, not the time of the read — the two live
+on the same axis, which is what makes "is my message read" the comparison `created_at <= peer_read_at`
+rather than a lookup. A receipt whose `read_at` will not parse is dropped: `isoToEpochMillis` falls
+back to *now*, and a now-shaped cursor would mark the whole dialog read.
+
+**Unread counts are derived, never counted up.** `selectAllWithPreview` counts messages from others
+past `self_read_at`. The `unread_count` column predates the cursor and is dead; nothing writes it.
 
 ---
 
@@ -294,7 +336,7 @@ None of this needs special handling, because the DB is the source of truth:
 | Situation | Behaviour |
 |---|---|
 | Send while offline | Row inserted `PENDING`, renders immediately, flushed on reconnect |
-| Read while offline | Local history renders normally |
+| Read while offline | Local history renders normally; the cursor is stored and flushed on reconnect |
 | App killed with pending sends | Outbox survives; flushed on next launch |
 | Offline for days | Catch-up pages through everything on reconnect |
 
@@ -318,3 +360,6 @@ Every one of these has a corresponding bug that ships without it:
 - [ ] Server `createdAt` differing from local → row reorders correctly
 - [ ] Backoff has jitter
 - [ ] Concurrent `loadOlder` calls → single request
+- [ ] Read receipt naming an older position → cursor unchanged, ticks unchanged
+- [ ] Read taken offline → one frame on reconnect, not one per message
+- [ ] Receipt with our own `user_id` → unread badge clears, ticks unchanged

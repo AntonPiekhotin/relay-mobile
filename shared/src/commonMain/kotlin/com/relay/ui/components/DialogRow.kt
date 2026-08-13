@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.relay.model.MessageState
 import com.relay.ui.state.DialogUi
 
 @Composable
@@ -78,11 +77,7 @@ private fun UnreadBadge(count: Long) {
 }
 
 private fun previewLine(dialog: DialogUi): String {
-    val prefix = when {
-        !dialog.previewIsMine -> ""
-        dialog.previewStatus == MessageState.FAILED -> "! "
-        dialog.previewStatus == MessageState.PENDING -> "○ "
-        else -> "✓ "
-    }
+    val status = dialog.previewStatus
+    val prefix = if (!dialog.previewIsMine || status == null) "" else statusGlyph(status) + " "
     return prefix + dialog.preview
 }

@@ -17,7 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.relay.model.MessageState
+import com.relay.ui.state.MessageStatusUi
 import com.relay.ui.state.MessageUi
 
 private val BUBBLE_MAX_WIDTH = 300.dp
@@ -76,7 +76,7 @@ private fun MessageMeta(message: MessageUi, onRetry: (Long) -> Unit) {
                 modifier = Modifier.semantics { contentDescription = statusDescription(message.status) }
             )
         }
-        if (message.status == MessageState.FAILED) {
+        if (message.status == MessageStatusUi.FAILED) {
             RetryChip(localId = message.localId, reason = message.failReason, onRetry = onRetry)
         }
     }
@@ -108,20 +108,23 @@ private fun bubbleShape(isMine: Boolean) =
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
 
-private fun statusGlyph(state: MessageState): String = when (state) {
-    MessageState.PENDING -> "○"
-    MessageState.SENT -> "✓"
-    MessageState.FAILED -> "!"
+fun statusGlyph(status: MessageStatusUi): String = when (status) {
+    MessageStatusUi.SENDING -> "○"
+    MessageStatusUi.SENT -> "✓"
+    MessageStatusUi.READ -> "✓✓"
+    MessageStatusUi.FAILED -> "!"
 }
 
-fun statusDescription(state: MessageState): String = when (state) {
-    MessageState.PENDING -> "Sending"
-    MessageState.SENT -> "Sent"
-    MessageState.FAILED -> "Failed"
+fun statusDescription(status: MessageStatusUi): String = when (status) {
+    MessageStatusUi.SENDING -> "Sending"
+    MessageStatusUi.SENT -> "Sent"
+    MessageStatusUi.READ -> "Read"
+    MessageStatusUi.FAILED -> "Failed"
 }
 
 @Composable
-private fun statusColor(state: MessageState) = when (state) {
-    MessageState.FAILED -> MaterialTheme.colorScheme.error
+private fun statusColor(status: MessageStatusUi) = when (status) {
+    MessageStatusUi.FAILED -> MaterialTheme.colorScheme.error
+    MessageStatusUi.READ -> MaterialTheme.colorScheme.primary
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

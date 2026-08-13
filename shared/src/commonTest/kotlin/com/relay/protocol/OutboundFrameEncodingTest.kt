@@ -30,6 +30,17 @@ class OutboundFrameEncodingTest {
     }
 
     @Test
+    fun messageReadCarriesTheCursorPosition() {
+        val encoded = encodeFrame(messageReadFrame("dialog-1", "m-9", "frame-1"))
+        val json = Json.parseToJsonElement(encoded).jsonObject
+        assertEquals("message.read", json["type"]?.jsonPrimitive?.content)
+        assertEquals("frame-1", json["id"]?.jsonPrimitive?.content)
+        val payload = json["payload"]?.jsonObject
+        assertEquals("dialog-1", payload?.get("dialog_id")?.jsonPrimitive?.content)
+        assertEquals("m-9", payload?.get("up_to_message_id")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun pingHasIdAndEmptyPayload() {
         val encoded = encodeFrame(pingFrame("ping-id-1"))
         val json = Json.parseToJsonElement(encoded).jsonObject

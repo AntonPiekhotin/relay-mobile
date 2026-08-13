@@ -48,11 +48,25 @@ data class MessageUi(
     val text: String,
     val isMine: Boolean,
     val timestamp: String,
-    val status: MessageStatus     // PENDING | SENT | FAILED
+    val status: MessageStatusUi   // SENDING | SENT | READ | FAILED
 )
 ```
 
-`MessageStatus` comes straight from the DB `state` column — do not track sending state separately in memory. A message killed mid-send must still render as `PENDING` after relaunch, which only works if the DB is the source.
+`MessageStatusUi` is derived in the mapper, never stored: `SENDING`/`SENT`/`FAILED` come straight from
+the DB `state` column, and `SENT` becomes `READ` when `createdAt <= dialog.peerReadAt`. Do not track
+sending state separately in memory. A message killed mid-send must still render as `SENDING` after
+relaunch, which only works if the DB is the source.
+
+| Status | Glyph | Colour |
+|---|---|---|
+| `SENDING` | `○` | `onSurfaceVariant` |
+| `SENT` | `✓` | `onSurfaceVariant` |
+| `READ` | `✓✓` | `primary` |
+| `FAILED` | `!` + retry chip | `error` |
+
+Ticks are drawn on our own messages only. `DialogRow` prefixes the preview line with the same glyph
+for the same reason, so the list and the chat never disagree. Read state itself is a per-dialog
+cursor — see `docs/SYNC.md` §3.1.
 
 ViewModel maps DB rows to UI models. **Do the mapping in the ViewModel, not the composable** — formatting timestamps inside a `LazyColumn` item runs on every recomposition.
 
@@ -221,8 +235,9 @@ Each takes plain data and lambdas — no ViewModel, no DI, no side effects. That
 
 ## 9. UI test checklist
 
-- [ ] Sending renders instantly as `PENDING`, before any network response
+- [ ] Sending renders instantly as `SENDING`, before any network response
 - [ ] Ack flips to `SENT` without the row jumping or flickering
+- [ ] A peer read receipt flips `SENT` to `READ` without the row jumping
 - [ ] `FAILED` message shows retry, and retry works
 - [ ] Scrolling up loads older messages exactly once per trigger
 - [ ] New message while scrolled up does **not** yank the view to the bottom

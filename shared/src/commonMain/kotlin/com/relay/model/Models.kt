@@ -23,7 +23,7 @@ data class Dialog(
     val title: String?,
     val peerId: String?,
     val lastMessageAt: Long?,
-    val unreadCount: Long
+    val peerReadAt: Long?
 )
 
 data class DialogSummary(
@@ -32,10 +32,17 @@ data class DialogSummary(
     val title: String?,
     val peerId: String?,
     val lastMessageAt: Long?,
+    val peerReadAt: Long?,
     val unreadCount: Long,
     val lastMessageText: String?,
     val lastMessageState: MessageState?,
-    val lastMessageSenderId: String?
+    val lastMessageSenderId: String?,
+    val lastMessageCreatedAt: Long?
+)
+
+data class ReadCursor(
+    val dialogId: String,
+    val upToMessageId: String
 )
 
 data class UnnamedDialog(

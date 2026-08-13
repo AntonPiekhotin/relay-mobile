@@ -4,16 +4,17 @@ import app.cash.turbine.test
 import com.relay.auth.SessionManager
 import com.relay.auth.StoredTokens
 import com.relay.db.MessageStore
-import com.relay.model.MessageState
 import com.relay.network.AuthApi
 import com.relay.network.AuthApiResult
 import com.relay.network.LoginRequest
 import com.relay.network.MessageApiResult
+import com.relay.protocol.FrameType
 import com.relay.network.RegisterRequest
 import com.relay.network.TokenResponse
 import com.relay.repository.ConnectionPhase
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.sync.Outbox
+import com.relay.sync.ReadReceipts
 import com.relay.testutil.FakeConnectionStatus
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
@@ -22,6 +23,7 @@ import com.relay.testutil.createTestDb
 import com.relay.testutil.testJwt
 import com.relay.testutil.wireMessage
 import com.relay.ui.state.ConnectionUi
+import com.relay.ui.state.MessageStatusUi
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -40,6 +42,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 private const val DIALOG = "d1"
 private const val SELF = "user-1"
@@ -72,7 +76,8 @@ private class ChatHarness(scope: TestScope) {
     )
     val tokenStore = FakeTokenStore()
     val session = SessionManager(StubAuthApi(), tokenStore)
-    val repository = MessageRepositoryImpl(store, outbox, api, session)
+    val readReceipts = ReadReceipts(store, socket)
+    val repository = MessageRepositoryImpl(store, outbox, api, session, readReceipts)
     val connection = FakeConnectionStatus()
 
     fun viewModel() = ChatViewModel(
@@ -124,7 +129,7 @@ class ChatViewModelTest {
         assertEquals("", state.draft)
         val message = state.messages.single()
         assertEquals("hello", message.text)
-        assertEquals(MessageState.PENDING, message.status)
+        assertEquals(MessageStatusUi.SENDING, message.status)
         assertTrue(message.isMine)
     }
 
@@ -148,7 +153,7 @@ class ChatViewModelTest {
 
         val sent = viewModel.state.value.messages.single()
         assertEquals(pending.localId, sent.localId)
-        assertEquals(MessageState.SENT, sent.status)
+        assertEquals(MessageStatusUi.SENT, sent.status)
     }
 
     @Test
@@ -165,7 +170,7 @@ class ChatViewModelTest {
         harness.store.markFailed(localId, "PAYLOAD_TOO_LARGE")
         advanceUntilIdle()
 
-        assertEquals(MessageState.FAILED, viewModel.state.value.messages.single().status)
+        assertEquals(MessageStatusUi.FAILED, viewModel.state.value.messages.single().status)
         assertEquals("PAYLOAD_TOO_LARGE", viewModel.state.value.messages.single().failReason)
 
         viewModel.retry(localId)
@@ -173,8 +178,102 @@ class ChatViewModelTest {
 
         val retried = viewModel.state.value.messages.single()
         assertEquals(localId, retried.localId)
-        assertEquals(MessageState.PENDING, retried.status)
+        assertEquals(MessageStatusUi.SENDING, retried.status)
         assertNull(retried.failReason)
+    }
+
+    @Test
+    fun aPeerReceiptTurnsMyDeliveredMessageIntoAReadOne() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        viewModel.onDraftChange("hello")
+        viewModel.send()
+        advanceUntilIdle()
+        val clientMsgId = assertNotNull(
+            harness.store.observeMessages(DIALOG).first().single().clientMsgId
+        )
+        harness.store.applyAck(clientMsgId, serverId = "srv-1", createdAt = FIXED_NOW)
+        advanceUntilIdle()
+        assertEquals(MessageStatusUi.SENT, viewModel.state.value.messages.single().status)
+
+        harness.store.applyReadReceipt(DIALOG, "peer", "srv-1", readAt = FIXED_NOW, selfId = SELF)
+        advanceUntilIdle()
+
+        assertEquals(MessageStatusUi.READ, viewModel.state.value.messages.single().status)
+    }
+
+    @Test
+    fun aReceiptOlderThanAMessageLeavesThatMessageUnread() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        harness.store.insertPending("cm-old", DIALOG, SELF, "older", FIXED_NOW - 1_000)
+        harness.store.applyAck("cm-old", serverId = "srv-old", createdAt = FIXED_NOW - 1_000)
+        harness.store.insertPending("cm-new", DIALOG, SELF, "newer", FIXED_NOW)
+        harness.store.applyAck("cm-new", serverId = "srv-new", createdAt = FIXED_NOW)
+        harness.store.applyReadReceipt(
+            DIALOG,
+            "peer",
+            "srv-old",
+            readAt = FIXED_NOW - 1_000,
+            selfId = SELF
+        )
+        advanceUntilIdle()
+
+        val messages = viewModel.state.value.messages
+        assertEquals(MessageStatusUi.SENT, messages[0].status)
+        assertEquals(MessageStatusUi.READ, messages[1].status)
+    }
+
+    @Test
+    fun openingAChatReportsTheNewestIncomingMessageAsRead() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.socket.connect(userId = SELF)
+        harness.store.applyRemoteMessage("srv-1", null, DIALOG, "peer", "one", FIXED_NOW, SELF)
+        harness.store.applyRemoteMessage("srv-2", null, DIALOG, "peer", "two", FIXED_NOW + 1, SELF)
+        harness.viewModel()
+        advanceUntilIdle()
+
+        val reads = harness.socket.sentFrames.filter { it.type == FrameType.MESSAGE_READ }
+        assertEquals(1, reads.size)
+        assertEquals(
+            "srv-2",
+            reads.single().payload?.jsonObject?.get("up_to_message_id")?.jsonPrimitive?.content
+        )
+        assertEquals(emptyList(), harness.store.unsentReads())
+    }
+
+    @Test
+    fun aReadTakenWhileDisconnectedStaysQueued() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.store.applyRemoteMessage("srv-1", null, DIALOG, "peer", "one", FIXED_NOW, SELF)
+        harness.viewModel()
+        advanceUntilIdle()
+
+        assertTrue(harness.socket.sentFrames.none { it.type == FrameType.MESSAGE_READ })
+        assertEquals(listOf("srv-1"), harness.store.unsentReads().map { it.upToMessageId })
+    }
+
+    @Test
+    fun myOwnMessagesDoNotTriggerAReadReport() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.socket.connect(userId = SELF)
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        viewModel.onDraftChange("hello")
+        viewModel.send()
+        advanceUntilIdle()
+
+        assertTrue(harness.socket.sentFrames.none { it.type == FrameType.MESSAGE_READ })
     }
 
     @Test

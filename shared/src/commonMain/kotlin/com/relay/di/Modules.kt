@@ -22,6 +22,7 @@ import com.relay.repository.SocketConnectionStatus
 import com.relay.repository.UserRepository
 import com.relay.repository.UserRepositoryImpl
 import com.relay.sync.Outbox
+import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.ui.SessionViewModel
 import com.relay.ui.chat.ChatViewModel
@@ -47,8 +48,9 @@ val commonModule = module {
     single { MessageStore(get(), ioDispatcher()) }
     single<MessageApi> { KtorMessageApi(get(), get(), get()) }
     single { Outbox(get(), get(), get(), get()) }
-    single { SyncEngine(get(), get(), get(), get(), get()) }
-    single<MessageRepository> { MessageRepositoryImpl(get(), get(), get(), get()) }
+    single { ReadReceipts(get(), get()) }
+    single { SyncEngine(get(), get(), get(), get(), get(), get()) }
+    single<MessageRepository> { MessageRepositoryImpl(get(), get(), get(), get(), get()) }
     single { ContactStore(get(), ioDispatcher()) }
     single<UserApi> { KtorUserApi(get(), get(), get()) }
     single<UserRepository> { UserRepositoryImpl(get(), get()) }

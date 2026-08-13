@@ -14,6 +14,7 @@ import com.relay.protocol.isoToEpochMillisOrNull
 import com.relay.protocol.newFrameId
 import com.relay.protocol.nowEpochMillis
 import com.relay.sync.Outbox
+import com.relay.sync.ReadReceipts
 import com.relay.sync.applyWireMessage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -29,12 +30,13 @@ sealed interface OpenDialogResult {
 interface MessageRepository {
     suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult
     fun observeDialogs(): Flow<List<Dialog>>
-    fun observeDialogSummaries(): Flow<List<DialogSummary>>
+    fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>>
     fun observeDialog(dialogId: String): Flow<Dialog?>
     fun observeMessages(dialogId: String, limit: Long): Flow<List<Message>>
     fun observeSyncState(dialogId: String): Flow<DialogSyncState?>
     suspend fun storedMessageCount(dialogId: String): Long
     suspend fun send(dialogId: String, text: String): Boolean
+    suspend fun markRead(dialogId: String)
     suspend fun retry(localId: Long)
     suspend fun loadOlder(dialogId: String)
 }
@@ -43,7 +45,8 @@ class MessageRepositoryImpl(
     private val store: MessageStore,
     private val outbox: Outbox,
     private val api: MessageApi,
-    private val session: SessionManager
+    private val session: SessionManager,
+    private val readReceipts: ReadReceipts
 ) : MessageRepository {
     private val loadOlderGuard = Mutex()
     private val loadingOlder = mutableSetOf<String>()
@@ -69,7 +72,8 @@ class MessageRepositoryImpl(
 
     override fun observeDialogs(): Flow<List<Dialog>> = store.observeDialogs()
 
-    override fun observeDialogSummaries(): Flow<List<DialogSummary>> = store.observeDialogSummaries()
+    override fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>> =
+        store.observeDialogSummaries(selfId)
 
     override fun observeDialog(dialogId: String): Flow<Dialog?> = store.observeDialog(dialogId)
 
@@ -94,6 +98,12 @@ class MessageRepositoryImpl(
         )
         outbox.wake()
         return true
+    }
+
+    override suspend fun markRead(dialogId: String) {
+        val selfId = (session.state.value as? AuthState.LoggedIn)?.userId ?: return
+        val newest = store.newestIncoming(dialogId, selfId) ?: return
+        readReceipts.mark(dialogId, newest.messageId, newest.createdAt)
     }
 
     override suspend fun retry(localId: Long) {

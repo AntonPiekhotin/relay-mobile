@@ -17,6 +17,7 @@ import com.relay.protocol.Envelope
 import com.relay.protocol.ErrorPayload
 import com.relay.protocol.InboundFrame
 import com.relay.protocol.MessageNewPayload
+import com.relay.protocol.MessageReadReceiptPayload
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -155,6 +156,14 @@ fun ackFrame(
     messageId: String,
     createdAt: String = TEST_ISO
 ): InboundFrame.Ack = InboundFrame.Ack(AckPayload(clientMsgId, messageId, createdAt))
+
+fun readReceiptFrame(
+    dialogId: String = "d1",
+    userId: String = "peer",
+    upToMessageId: String,
+    readAt: String = TEST_ISO
+): InboundFrame.MessageRead =
+    InboundFrame.MessageRead(MessageReadReceiptPayload(dialogId, userId, upToMessageId, readAt))
 
 fun errorFrame(code: String, refId: String?): InboundFrame.Error =
     InboundFrame.Error(ErrorPayload(code = code, message = null, refId = refId))

@@ -43,6 +43,29 @@ class InboundFrameParsingTest {
     }
 
     @Test
+    fun parsesReadReceipt() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"message.read","ts":1730000000000,
+               "payload":{"dialog_id":"d-1","user_id":"u-2",
+                          "up_to_message_id":"m-9","read_at":"2026-07-26T10:00:00Z"}}"""
+        )
+        val read = assertIs<InboundFrame.MessageRead>(frame)
+        assertEquals("d-1", read.payload.dialogId)
+        assertEquals("u-2", read.payload.userId)
+        assertEquals("m-9", read.payload.upToMessageId)
+        assertEquals("2026-07-26T10:00:00Z", read.payload.readAt)
+    }
+
+    @Test
+    fun readReceiptWithoutUserIdIsMalformed() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"message.read","ts":1,
+               "payload":{"dialog_id":"d-1","up_to_message_id":"m-9","read_at":"2026-07-26T10:00:00Z"}}"""
+        )
+        assertIs<InboundFrame.Malformed>(frame)
+    }
+
+    @Test
     fun parsesErrorWithNullRefId() {
         val frame = parseInboundFrame(
             """{"v":1,"type":"error","ts":1730000000000,

@@ -9,6 +9,7 @@ import com.relay.network.backoffDelayMillis
 import com.relay.protocol.ErrorCode
 import com.relay.protocol.ErrorPayload
 import com.relay.protocol.InboundFrame
+import com.relay.protocol.MessageReadReceiptPayload
 import com.relay.protocol.isoToEpochMillisOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,6 +34,7 @@ class SyncEngine(
     private val socket: SocketClient,
     private val api: MessageApi,
     private val outbox: Outbox,
+    private val readReceipts: ReadReceipts,
     private val scope: CoroutineScope
 ) {
     private val mutableState = MutableStateFlow<SyncEngineState>(SyncEngineState.Disconnected)
@@ -89,6 +91,7 @@ class SyncEngine(
                         SyncEngineState.Disconnected
                     }
                 outbox.wake()
+                readReceipts.flush()
                 if (!complete) scheduleCatchUpRetry()
             }
             is ConnectionState.Connecting -> mutableState.value = SyncEngineState.Connecting
@@ -130,9 +133,21 @@ class SyncEngine(
                 createdAt = isoToEpochMillisOrNull(frame.payload.createdAt)
             )
             is InboundFrame.MessageNew -> store.applyWireMessage(frame.payload.toWireMessage(), selfId())
+            is InboundFrame.MessageRead -> onReadReceipt(frame.payload)
             is InboundFrame.Error -> onError(frame.payload)
             else -> Unit
         }
+    }
+
+    private suspend fun onReadReceipt(payload: MessageReadReceiptPayload) {
+        val readAt = isoToEpochMillisOrNull(payload.readAt) ?: return
+        store.applyReadReceipt(
+            dialogId = payload.dialogId,
+            userId = payload.userId,
+            upToMessageId = payload.upToMessageId,
+            readAt = readAt,
+            selfId = selfId()
+        )
     }
 
     private suspend fun onError(payload: ErrorPayload) {

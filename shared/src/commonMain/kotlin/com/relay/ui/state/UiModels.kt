@@ -1,13 +1,13 @@
 package com.relay.ui.state
 
-import com.relay.model.MessageState
+enum class MessageStatusUi { SENDING, SENT, READ, FAILED }
 
 data class MessageUi(
     val localId: Long,
     val text: String,
     val isMine: Boolean,
     val timestamp: String,
-    val status: MessageState,
+    val status: MessageStatusUi,
     val failReason: String? = null,
     val daySeparator: String? = null
 )
@@ -19,7 +19,7 @@ data class DialogUi(
     val timestamp: String,
     val unreadCount: Long,
     val previewIsMine: Boolean,
-    val previewStatus: MessageState?
+    val previewStatus: MessageStatusUi?
 )
 
 data class PersonUi(

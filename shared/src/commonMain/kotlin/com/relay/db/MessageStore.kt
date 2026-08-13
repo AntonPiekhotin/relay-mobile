@@ -6,6 +6,7 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
 import com.relay.model.MessageState
+import com.relay.model.ReadCursor
 import com.relay.model.UnnamedDialog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,11 @@ import com.relay.model.Message as DomainMessage
 private const val DEFAULT_DIALOG_TYPE = "direct"
 private const val DEFAULT_VISIBLE_MESSAGES = 500L
 
+data class ReadPosition(
+    val messageId: String,
+    val createdAt: Long
+)
+
 class MessageStore(
     private val db: RelayDb,
     private val dispatcher: CoroutineDispatcher
@@ -27,8 +33,8 @@ class MessageStore(
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
 
-    fun observeDialogSummaries(): Flow<List<DialogSummary>> =
-        db.dialogQueries.selectAllWithPreview()
+    fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>> =
+        db.dialogQueries.selectAllWithPreview(selfId)
             .asFlow()
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
@@ -121,6 +127,42 @@ class MessageStore(
             db.dialogQueries.bumpLastMessageAt(createdAt, dialogId)
         }
     }
+
+    suspend fun markSelfRead(dialogId: String, upToMessageId: String, readAt: Long): Unit =
+        withContext(dispatcher) {
+            db.dialogQueries.advanceSelfRead(readAt, upToMessageId, dialogId)
+        }
+
+    suspend fun markSelfReadSent(dialogId: String, upToMessageId: String): Unit =
+        withContext(dispatcher) {
+            db.dialogQueries.markSelfReadSent(dialogId, upToMessageId)
+        }
+
+    suspend fun unsentReads(): List<ReadCursor> = withContext(dispatcher) {
+        db.dialogQueries.selectUnsentReads().executeAsList().mapNotNull { row ->
+            row.self_read_id?.let { ReadCursor(row.id, it) }
+        }
+    }
+
+    suspend fun applyReadReceipt(
+        dialogId: String,
+        userId: String,
+        upToMessageId: String,
+        readAt: Long,
+        selfId: String?
+    ): Unit = withContext(dispatcher) {
+        if (userId == selfId) {
+            db.dialogQueries.applyRemoteSelfRead(readAt, upToMessageId, dialogId)
+        } else {
+            db.dialogQueries.advancePeerRead(readAt, dialogId)
+        }
+    }
+
+    suspend fun newestIncoming(dialogId: String, selfId: String): ReadPosition? =
+        withContext(dispatcher) {
+            db.messageQueries.newestIncoming(dialogId, selfId).executeAsOneOrNull()
+                ?.let { row -> row.server_id?.let { ReadPosition(it, row.created_at) } }
+        }
 
     suspend fun upsertDialog(
         id: String,
@@ -245,10 +287,12 @@ private fun SelectAllWithPreview.toDomain(): DialogSummary =
         title = title,
         peerId = peer_id,
         lastMessageAt = last_message_at,
+        peerReadAt = peer_read_at,
         unreadCount = unread_count,
         lastMessageText = last_text,
         lastMessageState = last_state?.let { MessageState.valueOf(it) },
-        lastMessageSenderId = last_sender_id
+        lastMessageSenderId = last_sender_id,
+        lastMessageCreatedAt = last_created_at
     )
 
 private fun Dialog.toDomain(): DomainDialog =
@@ -258,5 +302,5 @@ private fun Dialog.toDomain(): DomainDialog =
         title = title,
         peerId = peer_id,
         lastMessageAt = last_message_at,
-        unreadCount = unread_count
+        peerReadAt = peer_read_at
     )

@@ -5,19 +5,26 @@ import com.relay.model.MessageState
 import com.relay.network.MessageApiResult
 import com.relay.network.WireDialog
 import com.relay.protocol.ErrorCode
+import com.relay.protocol.FrameType
+import com.relay.protocol.isoToEpochMillis
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
 import com.relay.testutil.ackFrame
 import com.relay.testutil.createTestDb
 import com.relay.testutil.errorFrame
 import com.relay.testutil.messageNewFrame
+import com.relay.testutil.readReceiptFrame
+import com.relay.testutil.TEST_ISO
 import com.relay.testutil.wireMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -36,11 +43,13 @@ private class EngineHarness(scope: TestScope) {
         scope = scope.backgroundScope,
         now = { scope.testScheduler.currentTime }
     )
+    val readReceipts = ReadReceipts(store, socket)
     val engine = SyncEngine(
         store = store,
         socket = socket,
         api = api,
         outbox = outbox,
+        readReceipts = readReceipts,
         scope = scope.backgroundScope
     )
 }
@@ -83,6 +92,53 @@ class SyncEngineTest {
         assertEquals(MessageState.SENT, message.state)
         assertEquals("srv-1", message.serverId)
         assertEquals("cm-1", message.clientMsgId)
+    }
+
+    @Test
+    fun aPeerReceiptAdvancesThePeerReadCursor() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.insertPending("cm-1", "d1", "me", "hi", 100)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.emitFrame(
+            readReceiptFrame(userId = "peer", upToMessageId = "srv-1", readAt = TEST_ISO)
+        )
+        runCurrent()
+        assertEquals(
+            isoToEpochMillis(TEST_ISO),
+            harness.store.observeDialog("d1").first()?.peerReadAt
+        )
+    }
+
+    @Test
+    fun aReceiptWithAnUnparseableTimestampIsIgnored() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.insertPending("cm-1", "d1", "me", "hi", 100)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.emitFrame(
+            readReceiptFrame(userId = "peer", upToMessageId = "srv-1", readAt = "not-a-timestamp")
+        )
+        runCurrent()
+        assertNull(harness.store.observeDialog("d1").first()?.peerReadAt)
+    }
+
+    @Test
+    fun readsTakenWhileOfflineAreFlushedOnReconnect() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.applyRemoteMessage("srv-1", null, "d1", "peer", "hello", 100, selfId = "me")
+        harness.store.markSelfRead("d1", "srv-1", 100)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+
+        val read = harness.socket.sentFrames.single { it.type == FrameType.MESSAGE_READ }
+        assertEquals(
+            "srv-1",
+            read.payload?.jsonObject?.get("up_to_message_id")?.jsonPrimitive?.content
+        )
+        assertEquals(emptyList(), harness.store.unsentReads())
     }
 
     @Test

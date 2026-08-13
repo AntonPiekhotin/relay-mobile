@@ -50,7 +50,7 @@ class SchemaMigrationTest {
 
     @Test
     fun schemaVersionMatchesTheNumberOfShippedMigrations() {
-        assertEquals(3L, RelayDb.Schema.version)
+        assertEquals(4L, RelayDb.Schema.version)
     }
 
     @Test
@@ -82,6 +82,30 @@ class SchemaMigrationTest {
         val contacts = ContactStore(RelayDb(driver), Dispatchers.Unconfined)
         contacts.clearAll()
         assertEquals(emptyList(), contacts.observeContacts().first())
+    }
+
+    @Test
+    fun upgradingAPhaseThreeDatabaseAddsTheReadCursors() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        VERSION_1_SCHEMA.forEach { driver.execute(null, it.trimIndent(), 0) }
+        driver.execute(
+            null,
+            "INSERT INTO dialog(id, type, title, last_message_at) VALUES ('d1', 'direct', NULL, 1)",
+            0
+        )
+
+        RelayDb.Schema.migrate(driver, oldVersion = 1, newVersion = RelayDb.Schema.version)
+
+        val store = MessageStore(RelayDb(driver), Dispatchers.Unconfined)
+        store.applyRemoteMessage("srv-1", null, "d1", "peer", "hello", 100, selfId = "me")
+        assertEquals(1L, store.observeDialogSummaries("me").first().single().unreadCount)
+
+        store.markSelfRead("d1", "srv-1", 100)
+        assertEquals(listOf("srv-1"), store.unsentReads().map { it.upToMessageId })
+        assertEquals(0L, store.observeDialogSummaries("me").first().single().unreadCount)
+
+        store.applyReadReceipt("d1", "peer", "srv-1", readAt = 100, selfId = "me")
+        assertEquals(100L, store.observeDialogs().first().single().peerReadAt)
     }
 
     @Test

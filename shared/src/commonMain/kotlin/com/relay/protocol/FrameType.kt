@@ -4,6 +4,7 @@ object FrameType {
     const val SESSION_CONNECTED = "session.connected"
     const val MESSAGE_SEND = "message.send"
     const val MESSAGE_NEW = "message.new"
+    const val MESSAGE_READ = "message.read"
     const val ACK = "ack"
     const val ERROR = "error"
     const val PING = "ping"

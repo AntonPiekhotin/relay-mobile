@@ -95,6 +95,7 @@ class FakeMessageRepository : MessageRepository {
         OpenDialogResult.Opened("dialog-for-$peerId")
     }
     val openedPeers = mutableListOf<String>()
+    val readDialogs = mutableListOf<String>()
 
     override suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult {
         openedPeers += peer.id
@@ -102,12 +103,16 @@ class FakeMessageRepository : MessageRepository {
     }
 
     override fun observeDialogs(): Flow<List<Dialog>> = flowOf(emptyList())
-    override fun observeDialogSummaries(): Flow<List<DialogSummary>> = flowOf(emptyList())
+    override fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>> = flowOf(emptyList())
     override fun observeDialog(dialogId: String): Flow<Dialog?> = flowOf(null)
     override fun observeMessages(dialogId: String, limit: Long): Flow<List<Message>> = flowOf(emptyList())
     override fun observeSyncState(dialogId: String): Flow<DialogSyncState?> = flowOf(null)
     override suspend fun storedMessageCount(dialogId: String): Long = 0
     override suspend fun send(dialogId: String, text: String): Boolean = false
+    override suspend fun markRead(dialogId: String) {
+        readDialogs += dialogId
+    }
+
     override suspend fun retry(localId: Long) = Unit
     override suspend fun loadOlder(dialogId: String) = Unit
 }

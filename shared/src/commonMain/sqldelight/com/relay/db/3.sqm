@@ -1,0 +1,7 @@
+ALTER TABLE dialog ADD COLUMN peer_read_at INTEGER;
+
+ALTER TABLE dialog ADD COLUMN self_read_at INTEGER;
+
+ALTER TABLE dialog ADD COLUMN self_read_id TEXT;
+
+ALTER TABLE dialog ADD COLUMN self_read_sent INTEGER NOT NULL DEFAULT 1;

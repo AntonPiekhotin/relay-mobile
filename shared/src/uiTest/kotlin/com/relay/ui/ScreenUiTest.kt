@@ -10,7 +10,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.test.swipeRight
-import com.relay.model.MessageState
 import com.relay.ui.components.BACK_BUTTON_TAG
 import com.relay.ui.components.CONNECTION_STRIP_TAG
 import com.relay.ui.components.ConnectionStrip
@@ -24,6 +23,7 @@ import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.people.PeopleScreen
 import com.relay.ui.profile.PROFILE_LOGOUT_TAG
 import com.relay.ui.profile.ProfileScreen
+import com.relay.ui.state.MessageStatusUi
 import com.relay.ui.state.ChatState
 import com.relay.ui.state.ConnectionUi
 import com.relay.ui.state.DialogListState
@@ -44,7 +44,7 @@ private fun dialogUi(id: String, title: String, preview: String) = DialogUi(
     timestamp = "12:00",
     unreadCount = 3,
     previewIsMine = false,
-    previewStatus = MessageState.SENT
+    previewStatus = MessageStatusUi.SENT
 )
 
 private fun personUi(id: String, name: String, isContact: Boolean) = PersonUi(

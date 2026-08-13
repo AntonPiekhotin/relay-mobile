@@ -21,7 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 const val INITIAL_VISIBLE_MESSAGES = 100L
@@ -62,6 +64,12 @@ class ChatViewModel(
             combine(stored, connection.phase, transient) { chat, phase, extras ->
                 buildState(chat, phase, extras)
             }.collect { built -> mutableState.value = built }
+        }
+        viewModelScope.launch {
+            stored
+                .map { chat -> chat.rows.firstOrNull()?.serverId }
+                .distinctUntilChanged()
+                .collect { messages.markRead(dialogId) }
         }
     }
 
@@ -115,7 +123,7 @@ class ChatViewModel(
         return ChatState(
             dialogId = dialogId,
             title = dialogTitleOf(chat.dialog?.title),
-            messages = chat.rows.toMessageUi(selfId, now()),
+            messages = chat.rows.toMessageUi(selfId, now(), chat.dialog?.peerReadAt),
             isLoadingOlder = extras.loading,
             hasMoreHistory = chat.syncState?.hasMoreHistory ?: false,
             draft = extras.draft,

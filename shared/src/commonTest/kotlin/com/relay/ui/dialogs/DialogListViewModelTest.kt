@@ -3,7 +3,6 @@ package com.relay.ui.dialogs
 import com.relay.auth.SessionManager
 import com.relay.auth.StoredTokens
 import com.relay.db.MessageStore
-import com.relay.model.MessageState
 import com.relay.network.AuthApi
 import com.relay.network.AuthApiResult
 import com.relay.network.LoginRequest
@@ -11,12 +10,14 @@ import com.relay.network.RegisterRequest
 import com.relay.network.TokenResponse
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.sync.Outbox
+import com.relay.sync.ReadReceipts
 import com.relay.testutil.FakeConnectionStatus
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
 import com.relay.testutil.FakeTokenStore
 import com.relay.testutil.createTestDb
 import com.relay.testutil.testJwt
+import com.relay.ui.state.MessageStatusUi
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -52,16 +53,18 @@ private class StubAuthApi : AuthApi {
 private class ListHarness(scope: TestScope) {
     val store = MessageStore(createTestDb(), UnconfinedTestDispatcher(scope.testScheduler))
     val api = FakeMessageApi()
+    val socket = FakeSocket()
     val outbox = Outbox(
         store = store,
-        socket = FakeSocket(),
+        socket = socket,
         api = api,
         scope = scope.backgroundScope,
         now = { scope.testScheduler.currentTime }
     )
     val tokenStore = FakeTokenStore()
     val session = SessionManager(StubAuthApi(), tokenStore)
-    val repository = MessageRepositoryImpl(store, outbox, api, session)
+    val readReceipts = ReadReceipts(store, socket)
+    val repository = MessageRepositoryImpl(store, outbox, api, session, readReceipts)
     val connection = FakeConnectionStatus()
 
     fun viewModel() = DialogListViewModel(repository, session, connection, now = { FIXED_NOW })
@@ -131,7 +134,7 @@ class DialogListViewModelTest {
         val row = viewModel.state.value.dialogs.single()
         assertEquals("mine", row.preview)
         assertTrue(row.previewIsMine)
-        assertEquals(MessageState.PENDING, row.previewStatus)
+        assertEquals(MessageStatusUi.SENDING, row.previewStatus)
     }
 
     @Test

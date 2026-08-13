@@ -8,6 +8,7 @@ sealed interface InboundFrame {
     data class SessionConnected(val payload: SessionConnectedPayload) : InboundFrame
     data class Ack(val payload: AckPayload) : InboundFrame
     data class MessageNew(val payload: MessageNewPayload) : InboundFrame
+    data class MessageRead(val payload: MessageReadReceiptPayload) : InboundFrame
     data class Error(val payload: ErrorPayload) : InboundFrame
     data class Pong(val payload: PongPayload) : InboundFrame
     data class Unknown(val type: String) : InboundFrame
@@ -29,6 +30,8 @@ fun parseInboundFrame(text: String): InboundFrame {
                 InboundFrame.SessionConnected(payload.decode(SessionConnectedPayload.serializer()))
             FrameType.ACK -> InboundFrame.Ack(payload.decode(AckPayload.serializer()))
             FrameType.MESSAGE_NEW -> InboundFrame.MessageNew(payload.decode(MessageNewPayload.serializer()))
+            FrameType.MESSAGE_READ ->
+                InboundFrame.MessageRead(payload.decode(MessageReadReceiptPayload.serializer()))
             FrameType.ERROR -> InboundFrame.Error(payload.decode(ErrorPayload.serializer()))
             FrameType.PONG -> InboundFrame.Pong(
                 if (payload is JsonNull) PongPayload() else payload.decode(PongPayload.serializer())

@@ -3,6 +3,7 @@ package com.relay.ui.state
 import com.relay.model.Contact
 import com.relay.model.DialogSummary
 import com.relay.model.Message
+import com.relay.model.MessageState
 import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
@@ -24,7 +25,19 @@ fun ConnectionPhase.toConnectionUi(): ConnectionUi = when (this) {
     ConnectionPhase.UNKNOWN -> ConnectionUi.Unknown
 }
 
-fun List<Message>.toMessageUi(selfId: String?, nowMillis: Long): List<MessageUi> =
+fun messageStatusUi(state: MessageState, createdAt: Long, peerReadAt: Long?): MessageStatusUi =
+    when (state) {
+        MessageState.PENDING -> MessageStatusUi.SENDING
+        MessageState.FAILED -> MessageStatusUi.FAILED
+        MessageState.SENT ->
+            if (peerReadAt != null && createdAt <= peerReadAt) {
+                MessageStatusUi.READ
+            } else {
+                MessageStatusUi.SENT
+            }
+    }
+
+fun List<Message>.toMessageUi(selfId: String?, nowMillis: Long, peerReadAt: Long?): List<MessageUi> =
     mapIndexed { index, message ->
         val olderNeighbour = getOrNull(index + 1)
         val startsDay = olderNeighbour == null ||
@@ -34,7 +47,7 @@ fun List<Message>.toMessageUi(selfId: String?, nowMillis: Long): List<MessageUi>
             text = message.text,
             isMine = selfId != null && message.senderId == selfId,
             timestamp = formatClockTime(message.createdAt),
-            status = message.state,
+            status = messageStatusUi(message.state, message.createdAt, peerReadAt),
             failReason = message.failReason,
             daySeparator = if (startsDay) formatDaySeparator(message.createdAt, nowMillis) else null
         )
@@ -49,7 +62,9 @@ fun List<DialogSummary>.toDialogUi(selfId: String?, nowMillis: Long): List<Dialo
             timestamp = summary.lastMessageAt?.let { formatListTimestamp(it, nowMillis) } ?: "",
             unreadCount = summary.unreadCount,
             previewIsMine = selfId != null && summary.lastMessageSenderId == selfId,
-            previewStatus = summary.lastMessageState
+            previewStatus = summary.lastMessageState?.let {
+                messageStatusUi(it, summary.lastMessageCreatedAt ?: 0L, summary.peerReadAt)
+            }
         )
     }
 

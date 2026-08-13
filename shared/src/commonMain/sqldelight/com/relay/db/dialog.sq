@@ -4,7 +4,11 @@ CREATE TABLE dialog (
     title            TEXT,
     last_message_at  INTEGER,
     unread_count     INTEGER NOT NULL DEFAULT 0,
-    peer_id          TEXT
+    peer_id          TEXT,
+    peer_read_at     INTEGER,
+    self_read_at     INTEGER,
+    self_read_id     TEXT,
+    self_read_sent   INTEGER NOT NULL DEFAULT 1
 );
 
 insertIfAbsent:
@@ -47,17 +51,41 @@ WHERE id = :id;
 selectAll:
 SELECT * FROM dialog ORDER BY COALESCE(last_message_at, 0) DESC, id;
 
+advancePeerRead:
+UPDATE dialog SET peer_read_at = MAX(COALESCE(peer_read_at, 0), :readAt) WHERE id = :id;
+
+advanceSelfRead:
+UPDATE dialog
+SET self_read_at = :readAt, self_read_id = :upToMessageId, self_read_sent = 0
+WHERE id = :id AND COALESCE(self_read_at, 0) < :readAt;
+
+applyRemoteSelfRead:
+UPDATE dialog
+SET self_read_at = :readAt, self_read_id = :upToMessageId, self_read_sent = 1
+WHERE id = :id AND COALESCE(self_read_at, 0) < :readAt;
+
+markSelfReadSent:
+UPDATE dialog SET self_read_sent = 1 WHERE id = :id AND self_read_id = :upToMessageId;
+
+selectUnsentReads:
+SELECT id, self_read_id FROM dialog WHERE self_read_sent = 0 AND self_read_id IS NOT NULL;
+
 selectAllWithPreview:
 SELECT
     d.id,
     d.type,
     d.title,
     d.last_message_at,
-    d.unread_count,
     d.peer_id,
+    d.peer_read_at,
+    (SELECT COUNT(*) FROM message unread
+     WHERE unread.dialog_id = d.id
+       AND unread.sender_id != COALESCE(:selfId, unread.sender_id)
+       AND unread.created_at > COALESCE(d.self_read_at, 0)) AS unread_count,
     m.text AS last_text,
     m.state AS last_state,
-    m.sender_id AS last_sender_id
+    m.sender_id AS last_sender_id,
+    m.created_at AS last_created_at
 FROM dialog d
 LEFT JOIN message m ON m.local_id = (
     SELECT local_id FROM message

@@ -33,6 +33,20 @@ data class MessageNewPayload(
 )
 
 @Serializable
+data class MessageReadPayload(
+    @SerialName("dialog_id") val dialogId: String,
+    @SerialName("up_to_message_id") val upToMessageId: String
+)
+
+@Serializable
+data class MessageReadReceiptPayload(
+    @SerialName("dialog_id") val dialogId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("up_to_message_id") val upToMessageId: String,
+    @SerialName("read_at") val readAt: String
+)
+
+@Serializable
 data class ErrorPayload(
     @SerialName("code") val code: String,
     @SerialName("message") val message: String? = null,

@@ -10,8 +10,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
-import com.relay.model.MessageState
 import com.relay.ui.components.MessageList
+import com.relay.ui.state.MessageStatusUi
 import com.relay.ui.state.MessageUi
 import com.relay.ui.theme.RelayTheme
 import kotlin.test.Test
@@ -22,7 +22,7 @@ private fun message(
     localId: Long,
     text: String = "message-$localId",
     isMine: Boolean = true,
-    status: MessageState = MessageState.SENT,
+    status: MessageStatusUi = MessageStatusUi.SENT,
     failReason: String? = null,
     daySeparator: String? = null
 ) = MessageUi(
@@ -64,7 +64,7 @@ class MessageListUiTest {
         setContent {
             RelayTheme {
                 MessageList(
-                    messages = listOf(message(1, status = MessageState.PENDING)),
+                    messages = listOf(message(1, status = MessageStatusUi.SENDING)),
                     hasMoreHistory = false,
                     isLoadingOlder = false,
                     onRetry = {},
@@ -78,7 +78,7 @@ class MessageListUiTest {
 
     @Test
     fun promotingPendingToSentKeepsTheRowAndSwapsTheStatus() = runComposeUiTest {
-        val status = mutableStateOf(MessageState.PENDING)
+        val status = mutableStateOf(MessageStatusUi.SENDING)
         setContent {
             RelayTheme {
                 MessageList(
@@ -93,7 +93,7 @@ class MessageListUiTest {
         }
         onNodeWithContentDescription("Sending").assertIsDisplayed()
 
-        status.value = MessageState.SENT
+        status.value = MessageStatusUi.SENT
         waitForIdle()
 
         onNodeWithText("hello").assertIsDisplayed()
@@ -107,7 +107,7 @@ class MessageListUiTest {
             RelayTheme {
                 MessageList(
                     messages = listOf(
-                        message(7, status = MessageState.FAILED, failReason = "PAYLOAD_TOO_LARGE")
+                        message(7, status = MessageStatusUi.FAILED, failReason = "PAYLOAD_TOO_LARGE")
                     ),
                     hasMoreHistory = false,
                     isLoadingOlder = false,

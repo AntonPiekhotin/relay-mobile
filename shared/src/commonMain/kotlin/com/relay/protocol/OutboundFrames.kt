@@ -24,6 +24,21 @@ fun messageSendFrame(clientMsgId: String, dialogId: String, text: String): Envel
         )
     )
 
+fun messageReadFrame(
+    dialogId: String,
+    upToMessageId: String,
+    frameId: String = newFrameId()
+): Envelope =
+    Envelope(
+        type = FrameType.MESSAGE_READ,
+        id = frameId,
+        ts = nowEpochMillis(),
+        payload = WireJson.encodeToJsonElement(
+            MessageReadPayload.serializer(),
+            MessageReadPayload(dialogId = dialogId, upToMessageId = upToMessageId)
+        )
+    )
+
 fun pingFrame(frameId: String = newFrameId()): Envelope =
     Envelope(
         type = FrameType.PING,
