@@ -92,7 +92,11 @@ Build order — do not skip ahead, each phase depends on the previous:
 - [x] **1. Shared core** — protocol models, Ktor WebSocket client, auth, connect to gateway from both platforms
 - [x] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
 - [x] **3. Compose UI** — dialog list, chat screen, composer. Also: theme, Navigation Compose, people search/contacts.
-- [ ] **4. Push notifications** — FCM + APNs, native both sides
+- [ ] **4. Push notifications** — FCM + APNs, native both sides.
+      *Shared + Android done* (`push/`, `RelayMessagingService`, device-token registration).
+      **Android needs `androidApp/google-services.json`** from the Firebase console (project
+      `relay-a7798`, package `com.relay`) — the build fails without it. iOS still to do: it needs
+      the Firebase iOS SDK, since the backend addresses devices by FCM token, not raw APNs token.
 - [ ] **5. Presence / typing**
 - [ ] **6. Calls** — shared signaling, native CallKit/ConnectionService
 
@@ -102,6 +106,19 @@ The backend is ahead of the client in some areas and behind in others. Current b
 
 - **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, call-log / ICE-server / device-token REST endpoints.
 - **Implemented (client-facing REST):** profile/search/contacts (`/api/v1/user/**`), and `POST /api/v1/message/dialogs` — opening the direct dialog with a peer, the only way a client obtains a dialog id.
-- **NOT implemented:** REST history, dialog list, and fallback send (still `/internal`-only), notification delivery, FCM push, presence, typing, online/offline split.
+- **Implemented (push):** notification-service consumes the `notifications` topic and fans out to FCM
+  (`FcmPushSender`, behind `relay.push.fcm.enabled`). Device tokens register through
+  `PUT /api/v1/notification/device-tokens`. Payloads are camelCase `data` keys with a `kind` of
+  `MESSAGE_NEW`, `INCOMING_CALL`, or `MISSED_CALL` — see `docs/PROTOCOL.md` §5.5.
+- **NOT implemented:** REST fallback send (still `/internal`-only), presence, typing.
 
-**Consequence:** the client's REST catch-up, history pagination, and fallback send are built against the target contract in `docs/PROTOCOL.md` §5 (`/api/v1/message/**`) and stay inert until the backend ships those endpoints — do not report their `404`s as client bugs. A dialog opened via `POST /api/v1/message/dialogs` is stored locally on creation, because with no dialog-list endpoint that local row is the only record the client has that the conversation exists. Until the backend notification service exists, a user who is offline receives nothing until they reopen the app and catch up. Do not build client logic that expects push delivery before phase 4. Do not report the absence of push as a client bug.
+**Consequence:** the client's REST fallback send is built against the target contract in
+`docs/PROTOCOL.md` §5.2 and stays inert until the backend ships it — do not report its `404`s as
+client bugs. A dialog opened via `POST /api/v1/message/dialogs` is stored locally on creation,
+because that local row is the record the client has that the conversation exists before catch-up
+runs.
+
+**Push is the server's job to send and the client's job to survive without.** A push is a hint that
+something changed, never the message itself: the payload carries ids, and the client catches up over
+REST (`PushCoordinator`). A device that receives no push still converges on next foreground. Never
+make delivery depend on a push arriving.

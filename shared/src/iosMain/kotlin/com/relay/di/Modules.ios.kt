@@ -6,6 +6,7 @@ import com.relay.auth.IosTokenStore
 import com.relay.auth.TokenStore
 import com.relay.config.AppConfig
 import com.relay.db.RelayDb
+import com.relay.push.PushPlatform
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import platform.Foundation.NSBundle
@@ -25,6 +26,7 @@ private data class IosDevConfig(
 
 actual val platformModule: Module = module {
     single<AppConfig> { IosDevConfig() }
+    single { PushPlatform("ios") }
     single<TokenStore> { IosTokenStore() }
     single<SqlDriver> { NativeSqliteDriver(RelayDb.Schema, "relay.db") }
 }

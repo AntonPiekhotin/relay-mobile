@@ -35,7 +35,8 @@ class SyncEngine(
     private val api: MessageApi,
     private val outbox: Outbox,
     private val readReceipts: ReadReceipts,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val authenticatedUserId: () -> String? = { null }
 ) {
     private val mutableState = MutableStateFlow<SyncEngineState>(SyncEngineState.Disconnected)
     val state: StateFlow<SyncEngineState> = mutableState.asStateFlow()
@@ -156,7 +157,11 @@ class SyncEngine(
         store.failPendingByClientMsgId(refId, payload.code)
     }
 
-    private fun selfId(): String? = (socket.state.value as? ConnectionState.Connected)?.userId
+    suspend fun wakeAndCatchUp(dialogId: String? = null): Boolean =
+        if (dialogId == null) catchUp() else catchUpDialog(dialogId)
+
+    private fun selfId(): String? =
+        (socket.state.value as? ConnectionState.Connected)?.userId ?: authenticatedUserId()
 
     private suspend fun catchUp(): Boolean {
         var complete = true

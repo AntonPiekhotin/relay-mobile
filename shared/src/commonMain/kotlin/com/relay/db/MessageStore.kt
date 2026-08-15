@@ -198,6 +198,14 @@ class MessageStore(
         db.messageQueries.findByClientMsgId(clientMsgId).executeAsOneOrNull()?.toDomain()
     }
 
+    suspend fun findByServerId(serverId: String): DomainMessage? = withContext(dispatcher) {
+        db.messageQueries.findByServerId(serverId).executeAsOneOrNull()?.toDomain()
+    }
+
+    suspend fun dialog(dialogId: String): DomainDialog? = withContext(dispatcher) {
+        db.dialogQueries.selectById(dialogId).executeAsOneOrNull()?.toDomain()
+    }
+
     suspend fun markAttempt(localId: Long, nextRetryAt: Long, now: Long): Unit =
         withContext(dispatcher) {
             db.messageQueries.markAttempt(nextRetryAt, now, localId)

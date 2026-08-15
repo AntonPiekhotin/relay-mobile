@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.relay.push.PushNavigator
 import com.relay.ui.chat.ChatScreen
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.components.SwipeBackBox
@@ -20,6 +21,7 @@ import com.relay.ui.people.PeopleScreen
 import com.relay.ui.people.PeopleViewModel
 import com.relay.ui.profile.ProfileScreen
 import com.relay.ui.profile.ProfileViewModel
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -28,6 +30,15 @@ fun RelayNavHost(
     onLogout: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
+    val pushNavigator = koinInject<PushNavigator>()
+    LaunchedEffect(navController) {
+        pushNavigator.targets.collect { dialogId ->
+            navController.navigate(Route.Chat(dialogId)) {
+                popUpTo<Route.DialogList>()
+            }
+        }
+    }
+
     NavHost(navController = navController, startDestination = Route.DialogList) {
         composable<Route.DialogList> { entry ->
             val viewModel = koinViewModel<DialogListViewModel>()

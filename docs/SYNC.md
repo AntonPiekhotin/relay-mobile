@@ -305,6 +305,12 @@ suspend fun catchUp() {
 - If `newestSyncedId` is null (fresh install), load the most recent page instead of the whole history.
 - Catch-up must be **idempotent and interruptible**. It runs on every reconnect, which on iOS is every foreground.
 
+**Catch-up does not need the socket.** It is REST only, which is what lets a push drive it:
+`SyncEngine.wakeAndCatchUp(dialogId)` runs the same code for one dialog with no connection at all
+(`docs/ANDROID.md` §3). Because the socket is down in that case, `selfId` falls back to the
+authenticated user from `SessionManager` rather than `session.connected` — without it an inbound
+message would be stored with no `peer_id` and the dialog would stay unnamed.
+
 ---
 
 ## 10. History pagination

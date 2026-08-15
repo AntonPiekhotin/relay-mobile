@@ -686,6 +686,56 @@ camelCase, like every other implemented endpoint.
 Persist the returned `id` locally on success: it is the dialog the UI opens, and until the dialog
 list endpoint exists it is the **only** record a client has that the conversation exists.
 
+### 5.5 Device tokens and the push payload
+
+**Implemented.** notification-service owns both halves: the registration endpoint below, and the
+`notifications` Kafka topic it consumes to fan a message out to every device the recipient has
+registered.
+
+```
+PUT /api/v1/notification/device-tokens
+{ "deviceId": "...", "platform": "android" | "ios" | "web",
+  "fcmToken": "...", "voipToken": null }
+
+200 → { "deviceId", "platform", "fcmToken", "voipToken", "updatedAt" }
+
+DELETE /api/v1/notification/device-tokens/{deviceId}
+204
+```
+
+- **The owner is the JWT `sub`, never a field.** There is no `userId` in the body, so a client
+  cannot register a token against somebody else's account.
+- **Upsert by `(userId, deviceId)`, and `PUT` because re-registering is routine** — FCM rotates
+  tokens. `deviceId` is the client's own stable per-install id, ≤ 128 chars.
+- **A null token clears the stored one.** That is how a client revokes one channel (notification
+  permission withdrawn) without logging out.
+- `fcmToken` and `voipToken` are separate columns because PushKit VoIP tokens come from a different
+  iOS API and are not interchangeable. Register both, send both.
+- **`DELETE` on logout**, so a signed-out device stops receiving pushes. Deleting an unknown device
+  is still `204`.
+- The server drops a token FCM declares `UNREGISTERED` or `INVALID_ARGUMENT`, so a stale row
+  self-heals without client action.
+
+**The push payload.** `data` keys are **camelCase**, like REST and unlike frames. Every push carries
+`kind`; the rest varies by kind:
+
+| `kind` | Other `data` keys | Notification block |
+|---|---|---|
+| `MESSAGE_NEW` | `dialogId`, `messageId`, `senderId` | yes — title/body drawn by the OS |
+| `INCOMING_CALL` | `callId`, `callerId`, `media`, `ringExpiresAt` | **no** — data-only, `content-available` |
+| `MISSED_CALL` | `callId`, `callerId`, `media` | yes |
+
+- **Identifiers, not content.** The message text rides along in the `notification` body for display
+  only; the client catches up over §5.1 to get the message itself. Treat a push as a hint that
+  something changed, never as delivery.
+- **A missing key arrives as the string `"null"`**, not as an absent key — the server stringifies
+  the payload map. Treat `"null"` as absent.
+- **An unknown `kind` must be ignored, not treated as an error**, the same rule as frame types (§3).
+- Android priority is `HIGH` so the push wakes the app from Doze.
+- **`MESSAGE_NEW` carries a `notification` block, so a backgrounded Android app never reaches
+  `onMessageReceived`** — the OS draws the notification and the app catches up when opened. Only a
+  foregrounded app sees the callback.
+
 ---
 
 ## 6. Idempotency and the send contract

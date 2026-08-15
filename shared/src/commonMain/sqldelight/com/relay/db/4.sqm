@@ -1,0 +1,10 @@
+CREATE TABLE push_device (
+    id               INTEGER NOT NULL PRIMARY KEY,
+    device_id        TEXT    NOT NULL,
+    platform         TEXT    NOT NULL,
+    fcm_token        TEXT,
+    voip_token       TEXT,
+    registered_user  TEXT,
+    registered_fcm   TEXT,
+    registered_voip  TEXT
+);

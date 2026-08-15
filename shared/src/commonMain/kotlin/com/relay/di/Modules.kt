@@ -1,19 +1,29 @@
 package com.relay.di
 
+import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
 import com.relay.concurrency.ioDispatcher
 import com.relay.db.ContactStore
 import com.relay.db.MessageStore
+import com.relay.db.PushStore
 import com.relay.db.RelayDb
 import com.relay.network.AuthApi
 import com.relay.network.ConnectionManager
 import com.relay.network.HttpClientFactory
 import com.relay.network.KtorAuthApi
 import com.relay.network.KtorMessageApi
+import com.relay.network.KtorNotificationApi
 import com.relay.network.KtorUserApi
 import com.relay.network.MessageApi
+import com.relay.network.NotificationApi
 import com.relay.network.SocketClient
 import com.relay.network.UserApi
+import com.relay.push.AppPresence
+import com.relay.push.DeviceTokenRegistrar
+import com.relay.push.PushCoordinator
+import com.relay.push.PushNavigator
+import com.relay.push.PushPermissionRequests
+import com.relay.push.PushPlatform
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.repository.MessageRepositoryImpl
@@ -46,19 +56,31 @@ val commonModule = module {
     single<SocketClient> { get<ConnectionManager>() }
     single { RelayDb(get()) }
     single { MessageStore(get(), ioDispatcher()) }
+    single { PushStore(get(), ioDispatcher(), get<PushPlatform>().name) }
     single<MessageApi> { KtorMessageApi(get(), get(), get()) }
+    single<NotificationApi> { KtorNotificationApi(get(), get(), get()) }
     single { Outbox(get(), get(), get(), get()) }
     single { ReadReceipts(get(), get()) }
-    single { SyncEngine(get(), get(), get(), get(), get(), get()) }
+    single {
+        val session = get<SessionManager>()
+        SyncEngine(get(), get(), get(), get(), get(), get()) {
+            (session.state.value as? AuthState.LoggedIn)?.userId
+        }
+    }
+    single { AppPresence() }
+    single { PushPermissionRequests() }
+    single { PushNavigator() }
+    single { PushCoordinator(get(), get(), get()) }
+    single { DeviceTokenRegistrar(get(), get(), get(), get()) }
     single<MessageRepository> { MessageRepositoryImpl(get(), get(), get(), get(), get()) }
     single { ContactStore(get(), ioDispatcher()) }
     single<UserApi> { KtorUserApi(get(), get(), get()) }
     single<UserRepository> { UserRepositoryImpl(get(), get()) }
     single { PeerNameResolver(get(), get(), get(), get()) }
     single<ConnectionStatus> { SocketConnectionStatus(get()) }
-    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
-    factory { (dialogId: String) -> ChatViewModel(dialogId, get(), get(), get()) }
+    factory { (dialogId: String) -> ChatViewModel(dialogId, get(), get(), get(), get(), get()) }
     factory { PeopleViewModel(get(), get()) }
     factory { ProfileViewModel(get()) }
 }

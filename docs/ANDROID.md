@@ -61,22 +61,30 @@ Use a low-importance notification channel so the persistent notification is sile
 
 ## 3. FCM
 
-```kotlin
-class RelayFirebaseService : FirebaseMessagingService() {
-    override fun onNewToken(token: String) {
-        // Register with the backend; store locally so it can be re-sent after login
-        tokenRegistrar.register(token, kind = "fcm")
-    }
+**Built.** `androidApp/src/main/kotlin/com/relay/push/` holds the Android half; the decisions live in
+`shared` so iOS reuses them. The wire contract is `docs/PROTOCOL.md` §5.5.
 
-    override fun onMessageReceived(message: RemoteMessage) {
-        when (message.data["kind"]) {
-            "message" -> { syncEngine.wakeAndCatchUp(); showNotification(message) }
-            "call"    -> callHandler.onIncomingCall(message.data)
-            else      -> Unit   // unknown kinds must be ignored, not crash
-        }
-    }
-}
-```
+| Piece | Where | Does |
+|---|---|---|
+| `RelayMessagingService` | androidApp | receives the push, hands it to the shared coordinator |
+| `MessageNotifier` | androidApp | builds the notification, tap → `MainActivity` with `dialogId` |
+| `NotificationChannels` | androidApp | `messages` (default) and `calls` (high) |
+| `parsePushEvent` | shared `push/` | payload map → typed `PushEvent`, unknown kinds → `Unknown` |
+| `PushCoordinator` | shared `push/` | catch up over REST, then decide notify-or-suppress |
+| `DeviceTokenRegistrar` | shared `push/` | registers the token, retries, unregisters on logout |
+| `PushStore` | shared `db/` | the device id and tokens, in the `push_device` table |
+
+**Firebase config is required to build.** `androidApp/google-services.json` from the Firebase console
+(project `relay-a7798`, package `com.relay`). Without it `processDebugGoogleServices` fails.
+
+**`onNewToken` is not enough.** It fires only when the token *rotates*, so `RelayApplication` also
+asks `FirebaseMessaging.getToken()` at startup and feeds the registrar. A device that never rotated
+would otherwise never register.
+
+**A token can arrive before login.** `PushStore` writes it regardless and `DeviceTokenRegistrar`
+sends it when `AuthState` becomes `LoggedIn` — the registration is keyed on
+`(user, fcmToken, voipToken)`, so an unchanged registration costs no request and a rotated token
+re-registers.
 
 **Payload should carry minimal data.** Send identifiers, not content — then catch up over REST. This avoids notification payload size limits, keeps message text out of Google's infrastructure, and guarantees the local DB is the source of truth.
 
@@ -88,13 +96,18 @@ class RelayFirebaseService : FirebaseMessagingService() {
 
 ## 4. Notification handling
 
-Do not post a notification for a message that is already on screen. Check whether the app is foregrounded and whether that dialog is open:
+Do not post a notification for a message that is already on screen. `AppPresence` tracks both facts —
+`MainActivity.onStart`/`onStop` set foreground, `ChatViewModel` sets the open dialog in `init` and
+clears it in `onCleared` — and `PushCoordinator` checks them:
 
 ```kotlin
-if (appState.isForeground && appState.openDialogId == message.dialogId) return
+if (presence.isShowing(event.dialogId)) return PushDisplay.Suppress
 ```
 
 This mirrors the server's socket-XOR-push rule at the client level, and catches the race where a push arrives just as the user opens the chat.
+
+**Catch up first, decide second.** `PushCoordinator` runs the REST catch-up *before* the suppression
+check, so an open chat still gets the message even though no notification is posted.
 
 Channels: separate channels for messages (default importance) and calls (high importance, with a custom ringtone), so users can configure them independently.
 
@@ -133,6 +146,12 @@ Unlike iOS, Android imposes no obligation to report the call within a deadline. 
 | `USE_FULL_SCREEN_INTENT` | Calls, Android 14+ | Special |
 
 Request at the point of use. Requesting notification permission on first launch produces a high denial rate; ask when the user sends their first message instead.
+
+**How that is wired without leaking an Activity:** `ChatViewModel` calls
+`PushPermissionRequests.request()` after a successful send; `MainActivity` collects that flow and
+launches its `ActivityResultLauncher`. Shared code never sees an `Activity`, and the ask happens at
+most once per process (`MessageNotifier` silently drops notifications while the permission is
+denied).
 
 ---
 

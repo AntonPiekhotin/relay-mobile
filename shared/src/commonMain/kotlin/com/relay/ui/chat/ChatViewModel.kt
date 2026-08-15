@@ -8,6 +8,8 @@ import com.relay.model.Dialog
 import com.relay.model.DialogSyncState
 import com.relay.model.Message
 import com.relay.protocol.nowEpochMillis
+import com.relay.push.AppPresence
+import com.relay.push.PushPermissionRequests
 import com.relay.repository.ConnectionPhase
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.HISTORY_PAGE_SIZE
@@ -36,6 +38,8 @@ class ChatViewModel(
     private val messages: MessageRepository,
     private val session: SessionManager,
     private val connection: ConnectionStatus,
+    private val presence: AppPresence,
+    private val permissionRequests: PushPermissionRequests,
     private val now: () -> Long = ::nowEpochMillis
 ) : ViewModel() {
 
@@ -60,6 +64,7 @@ class ChatViewModel(
     ) { currentDraft, loading, error, auth -> Transient(currentDraft, loading, error, auth) }
 
     init {
+        presence.onDialogOpened(dialogId)
         viewModelScope.launch {
             combine(stored, connection.phase, transient) { chat, phase, extras ->
                 buildState(chat, phase, extras)
@@ -89,10 +94,16 @@ class ChatViewModel(
             if (messages.send(dialogId, text)) {
                 sendError.value = null
                 if (draft.value == text) draft.value = ""
+                permissionRequests.request()
             } else {
                 sendError.value = SEND_FAILED
             }
         }
+    }
+
+    override fun onCleared() {
+        presence.onDialogClosed(dialogId)
+        super.onCleared()
     }
 
     fun retry(localId: Long) {

@@ -9,6 +9,7 @@ import com.relay.db.ContactStore
 import com.relay.db.MessageStore
 import com.relay.network.ConnectionManager
 import com.relay.network.ConnectionState
+import com.relay.push.DeviceTokenRegistrar
 import com.relay.repository.PeerNameResolver
 import com.relay.sync.Outbox
 import com.relay.sync.SyncEngine
@@ -24,7 +25,8 @@ class SessionViewModel(
     private val outbox: Outbox,
     private val store: MessageStore,
     private val contacts: ContactStore,
-    private val peerNames: PeerNameResolver
+    private val peerNames: PeerNameResolver,
+    private val pushTokens: DeviceTokenRegistrar
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = session.state
@@ -45,12 +47,14 @@ class SessionViewModel(
                         syncEngine.start()
                         outbox.start()
                         peerNames.start()
+                        pushTokens.start()
                         connection.start()
                     }
                     is AuthState.LoggedOut -> {
                         connection.stop()
                         outbox.stop()
                         peerNames.stop()
+                        pushTokens.stop()
                         syncEngine.stop()
                         store.clearAll()
                         contacts.clearAll()
@@ -70,7 +74,10 @@ class SessionViewModel(
     }
 
     fun logout() {
-        viewModelScope.launch { session.logout() }
+        viewModelScope.launch {
+            pushTokens.unregister()
+            session.logout()
+        }
     }
 
     private fun authAction(action: suspend () -> AuthResult) {

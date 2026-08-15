@@ -50,7 +50,21 @@ class SchemaMigrationTest {
 
     @Test
     fun schemaVersionMatchesTheNumberOfShippedMigrations() {
-        assertEquals(4L, RelayDb.Schema.version)
+        assertEquals(5L, RelayDb.Schema.version)
+    }
+
+    @Test
+    fun upgradingAPhaseThreeDatabaseAddsThePushDeviceRow() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        VERSION_1_SCHEMA.forEach { driver.execute(null, it.trimIndent(), 0) }
+
+        RelayDb.Schema.migrate(driver, oldVersion = 1, newVersion = RelayDb.Schema.version)
+
+        val push = PushStore(RelayDb(driver), Dispatchers.Unconfined, "android") { "device-1" }
+        assertEquals("device-1", push.device().deviceId)
+        push.setFcmToken("token-1")
+        assertEquals("device-1", push.device().deviceId)
+        assertEquals("token-1", push.device().fcmToken)
     }
 
     @Test

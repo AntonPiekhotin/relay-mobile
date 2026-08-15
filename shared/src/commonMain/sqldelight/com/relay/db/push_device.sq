@@ -1,0 +1,33 @@
+CREATE TABLE push_device (
+    id               INTEGER NOT NULL PRIMARY KEY,
+    device_id        TEXT    NOT NULL,
+    platform         TEXT    NOT NULL,
+    fcm_token        TEXT,
+    voip_token       TEXT,
+    registered_user  TEXT,
+    registered_fcm   TEXT,
+    registered_voip  TEXT
+);
+
+select:
+SELECT * FROM push_device WHERE id = 0;
+
+insertIfAbsent:
+INSERT OR IGNORE INTO push_device(id, device_id, platform)
+VALUES (0, :deviceId, :platform);
+
+setFcmToken:
+UPDATE push_device SET fcm_token = :fcmToken WHERE id = 0;
+
+setVoipToken:
+UPDATE push_device SET voip_token = :voipToken WHERE id = 0;
+
+markRegistered:
+UPDATE push_device
+SET registered_user = :userId, registered_fcm = :fcmToken, registered_voip = :voipToken
+WHERE id = 0;
+
+clearRegistration:
+UPDATE push_device
+SET registered_user = NULL, registered_fcm = NULL, registered_voip = NULL
+WHERE id = 0;

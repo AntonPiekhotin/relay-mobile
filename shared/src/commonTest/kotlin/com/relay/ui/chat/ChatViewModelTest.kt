@@ -11,6 +11,8 @@ import com.relay.network.MessageApiResult
 import com.relay.protocol.FrameType
 import com.relay.network.RegisterRequest
 import com.relay.network.TokenResponse
+import com.relay.push.AppPresence
+import com.relay.push.PushPermissionRequests
 import com.relay.repository.ConnectionPhase
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.sync.Outbox
@@ -80,11 +82,16 @@ private class ChatHarness(scope: TestScope) {
     val repository = MessageRepositoryImpl(store, outbox, api, session, readReceipts)
     val connection = FakeConnectionStatus()
 
+    val presence = AppPresence()
+    val permissionRequests = PushPermissionRequests()
+
     fun viewModel() = ChatViewModel(
         dialogId = DIALOG,
         messages = repository,
         session = session,
         connection = connection,
+        presence = presence,
+        permissionRequests = permissionRequests,
         now = { FIXED_NOW }
     )
 

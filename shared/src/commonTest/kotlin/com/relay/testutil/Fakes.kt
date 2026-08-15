@@ -4,12 +4,20 @@ import com.relay.auth.StoredTokens
 import com.relay.auth.TokenStore
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import com.relay.network.AuthApi
+import com.relay.network.AuthApiResult
 import com.relay.network.ConnectionState
 import com.relay.network.FallbackSendResponse
+import com.relay.network.LoginRequest
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
+import com.relay.network.NotificationApi
+import com.relay.network.NotificationApiResult
 import com.relay.network.OpenedDialogResponse
+import com.relay.network.RegisterDeviceTokenRequest
+import com.relay.network.RegisterRequest
 import com.relay.network.SocketClient
+import com.relay.network.TokenResponse
 import com.relay.network.WireDialog
 import com.relay.network.WireMessage
 import com.relay.protocol.AckPayload
@@ -116,6 +124,37 @@ class FakeMessageApi : MessageApi {
         fallbackCalls++
         return fallbackHandler(clientMsgId, dialogId, text)
     }
+}
+
+class FakeNotificationApi : NotificationApi {
+    val registrations = mutableListOf<RegisterDeviceTokenRequest>()
+    val unregistrations = mutableListOf<String>()
+
+    var registerHandler: suspend (RegisterDeviceTokenRequest) -> NotificationApiResult =
+        { NotificationApiResult.Success }
+
+    override suspend fun registerDevice(request: RegisterDeviceTokenRequest): NotificationApiResult {
+        registrations += request
+        return registerHandler(request)
+    }
+
+    override suspend fun unregisterDevice(deviceId: String): NotificationApiResult {
+        unregistrations += deviceId
+        return NotificationApiResult.Success
+    }
+}
+
+class StubAuthApi : AuthApi {
+    override suspend fun login(request: LoginRequest): AuthApiResult<TokenResponse> =
+        AuthApiResult.Unreachable("stub")
+
+    override suspend fun register(request: RegisterRequest): AuthApiResult<TokenResponse> =
+        AuthApiResult.Unreachable("stub")
+
+    override suspend fun refresh(refreshToken: String): AuthApiResult<TokenResponse> =
+        AuthApiResult.Unreachable("stub")
+
+    override suspend fun logout(refreshToken: String) = Unit
 }
 
 class FakeTokenStore : TokenStore {

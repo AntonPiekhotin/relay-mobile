@@ -21,9 +21,21 @@ if (!socket.isConnected) showBanner("No connection")
 
 Show connection state only as a subtle, delayed indicator — if at all. A socket that is down for two seconds during a foreground transition is normal operation, not a problem worth telling the user about.
 
-### Current backend limitation
+### Current client limitation
 
-The backend notification service does not exist yet. Until it does, **an iOS user who backgrounds the app receives nothing until they reopen it.** This is expected. Do not attempt to work around it client-side; the fix is server-side (phase 4).
+**The backend push path is built** — notification-service fans out to FCM (`docs/PROTOCOL.md` §5.5)
+— and so is the shared client half (`push/`). **iOS is the part still missing.** Until it ships, an
+iOS user who backgrounds the app receives nothing until they reopen it and catch up.
+
+The catch: **the backend addresses devices by FCM token, not by raw APNs token.** `FcmPushSender`
+sends through Firebase with an `ApnsConfig`, so an iOS device must register a *Firebase* registration
+token — which means adding the Firebase iOS SDK to `iosApp` and a `GoogleService-Info.plist`, plus an
+APNs auth key uploaded to the Firebase console. Registering the bare `deviceToken` from
+`didRegisterForRemoteNotificationsWithDeviceToken` will not work; nothing will be delivered.
+
+Everything above that line is already shared: `DeviceTokenRegistrar` (platform `"ios"` is already
+bound in `Modules.ios.kt`), `parsePushEvent`, and `PushCoordinator`. The iOS work is the SDK, the
+`AppDelegate`, and a bridge that calls `registrar.onFcmToken` / `onVoipToken`.
 
 ---
 
