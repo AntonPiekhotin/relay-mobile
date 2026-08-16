@@ -1,15 +1,12 @@
 package com.relay
 
 import androidx.compose.ui.window.ComposeUIViewController
-import com.relay.di.initKoin
-
-private var koinStarted = false
+import com.relay.di.ensureKoinStarted
+import com.relay.push.SharedBridge
 
 fun MainViewController() = ComposeUIViewController(
     configure = {
-        if (!koinStarted) {
-            initKoin()
-            koinStarted = true
-        }
+        ensureKoinStarted()
+        SharedBridge.start()
     }
 ) { App() }

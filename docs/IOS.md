@@ -21,21 +21,40 @@ if (!socket.isConnected) showBanner("No connection")
 
 Show connection state only as a subtle, delayed indicator — if at all. A socket that is down for two seconds during a foreground transition is normal operation, not a problem worth telling the user about.
 
-### Current client limitation
+### Push on iOS: what exists, and the one thing that blocks it
 
-**The backend push path is built** — notification-service fans out to FCM (`docs/PROTOCOL.md` §5.5)
-— and so is the shared client half (`push/`). **iOS is the part still missing.** Until it ships, an
-iOS user who backgrounds the app receives nothing until they reopen it and catch up.
+**Everything except APNs itself is built.** The scaffolding compiles, launches, and is wired:
 
-The catch: **the backend addresses devices by FCM token, not by raw APNs token.** `FcmPushSender`
-sends through Firebase with an `ApnsConfig`, so an iOS device must register a *Firebase* registration
-token — which means adding the Firebase iOS SDK to `iosApp` and a `GoogleService-Info.plist`, plus an
-APNs auth key uploaded to the Firebase console. Registering the bare `deviceToken` from
-`didRegisterForRemoteNotificationsWithDeviceToken` will not work; nothing will be delivered.
+| Piece | Where |
+|---|---|
+| `AppDelegate` — UNUserNotificationCenter delegate, remote-notification callbacks | `iosApp/iosApp/AppDelegate.swift` |
+| `SharedBridge` — the whole Swift-facing surface (§8) | `iosMain/push/SharedBridge.kt` |
+| `IosAppLifecycle` — foreground/background → `AppPresence` + socket | `iosMain/push/IosAppLifecycle.kt` |
+| `IosNotificationPresenter` — local notification, tap carries `dialogId` | `iosMain/push/IosNotificationPresenter.kt` |
+| `parsePushEvent`, `PushCoordinator`, `DeviceTokenRegistrar` | shared, platform `"ios"` bound in `Modules.ios.kt` |
 
-Everything above that line is already shared: `DeviceTokenRegistrar` (platform `"ios"` is already
-bound in `Modules.ios.kt`), `parsePushEvent`, and `PushCoordinator`. The iOS work is the SDK, the
-`AppDelegate`, and a bridge that calls `registrar.onFcmToken` / `onVoipToken`.
+**The blocker is the `aps-environment` entitlement, and it is not worth fighting.** Verified on
+Xcode 26.2 against an iPhone 17 Pro simulator: with no entitlement,
+`registerForRemoteNotifications` fails with *"no valid aps-environment entitlement string found"*
+and **`didReceiveRemoteNotification` never fires — not even for `xcrun simctl push`.** Simulated
+pushes are not a way around the paid Apple Developer Program. Injecting the entitlement by hand does
+not work either: a command-line `CODE_SIGN_ENTITLEMENTS` is ignored for simulator builds, and
+re-signing the built `.app` invalidates the embedded `Shared.framework` so the app refuses to launch
+(`SBMainWorkspace` denies it). Both were tried; both are dead ends.
+
+**And a second requirement stacks on top:** the backend addresses devices by **FCM token, not raw
+APNs token** (`FcmPushSender` sends through Firebase with an `ApnsConfig`). So iOS also needs the
+Firebase iOS SDK and a `GoogleService-Info.plist`, plus an APNs auth key uploaded to the Firebase
+console. `Messaging.token` refuses to issue a registration token until an APNs token exists, so
+there is nothing to send to `PUT /device-tokens` until the entitlement is real. Registering the bare
+`deviceToken` from `didRegisterForRemoteNotificationsWithDeviceToken` will never deliver anything.
+
+**What remains when the account is in place:** add FirebaseMessaging via SPM, enable the Push
+Notifications capability, set `Messaging.messaging().apnsToken`, and swap `SharedBridge.registerApnsToken`
+to forward the FCM token instead. The shared half needs no change.
+
+Until then an iOS user who backgrounds the app receives nothing until they reopen it and catch up —
+which is correct behaviour, not a bug, because delivery never depends on a push arriving.
 
 ---
 
@@ -175,11 +194,16 @@ Gradle builds the shared framework as an Xcode build phase. `./gradlew :composeA
 
 **Required `Info.plist` entries:**
 
-| Key | Reason |
-|---|---|
-| `NSMicrophoneUsageDescription` | Calls |
-| `NSCameraUsageDescription` | Video calls |
-| `UIBackgroundModes` → `voip`, `remote-notification`, `audio` | PushKit and call audio |
+| Key | Reason | Status |
+|---|---|---|
+| `UIBackgroundModes` → `remote-notification` | Background data pushes | **set** |
+| `UIBackgroundModes` → `voip`, `audio` | PushKit and call audio | phase 6 |
+| `NSMicrophoneUsageDescription` | Calls | phase 6 |
+| `NSCameraUsageDescription` | Video calls | phase 6 |
+
+`UIBackgroundModes` is a plist key and needs no paid account — unlike the **Push Notifications
+capability**, which writes the `aps-environment` entitlement and does. Adding the background mode
+without the entitlement is legal and useless on its own; see §1.
 
 **Capabilities:** Push Notifications, Background Modes.
 

@@ -93,10 +93,10 @@ Build order — do not skip ahead, each phase depends on the previous:
 - [x] **2. Local DB + sync engine** — outbox, ack handling, catch-up. *The hard part. Get it right before any UI.*
 - [x] **3. Compose UI** — dialog list, chat screen, composer. Also: theme, Navigation Compose, people search/contacts.
 - [ ] **4. Push notifications** — FCM + APNs, native both sides.
-      *Shared + Android done* (`push/`, `RelayMessagingService`, device-token registration).
-      **Android needs `androidApp/google-services.json`** from the Firebase console (project
-      `relay-a7798`, package `com.relay`) — the build fails without it. iOS still to do: it needs
-      the Firebase iOS SDK, since the backend addresses devices by FCM token, not raw APNs token.
+      **Android done and verified end to end.** iOS scaffolding done — bridge, lifecycle,
+      notification presenter, `AppDelegate` — but **blocked on a paid Apple Developer account**:
+      without the `aps-environment` entitlement no remote push is delivered, not even via
+      `simctl push`. See `docs/IOS.md` §1 before touching it.
 - [ ] **5. Presence / typing**
 - [ ] **6. Calls** — shared signaling, native CallKit/ConnectionService
 
