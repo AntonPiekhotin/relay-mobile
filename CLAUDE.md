@@ -45,6 +45,7 @@ if (socket.isConnected) showMessages() else showError()
 | Wire format, frames, REST endpoints, error codes | `docs/PROTOCOL.md` |
 | Module layout, layering, DI, testing | `docs/ARCHITECTURE.md` |
 | Outbox, ack handling, catch-up, DB schema, offline | `docs/SYNC.md` |
+| Call signaling, WebRTC, the call state machine | `docs/CALLS.md` |
 | iOS lifecycle, PushKit, CallKit, Xcode | `docs/IOS.md` |
 | Android service, FCM, Doze, permissions | `docs/ANDROID.md` |
 | Composables, navigation, theming, state | `docs/UI.md` |
@@ -98,7 +99,10 @@ Build order — do not skip ahead, each phase depends on the previous:
       without the `aps-environment` entitlement no remote push is delivered, not even via
       `simctl push`. See `docs/IOS.md` §1 before touching it.
 - [ ] **5. Presence / typing**
-- [ ] **6. Calls** — shared signaling, native CallKit/ConnectionService
+- [x] **6. Calls** — 1:1 audio, signaling + WebRTC media on both platforms. **Foreground only:**
+      no CallKit and no ConnectionService, so iOS cannot ring a backgrounded app (same
+      `aps-environment` blocker as phase 4) and Android rings via a full-screen intent. Read
+      `docs/CALLS.md` before touching any of it.
 
 ## Backend reality check
 

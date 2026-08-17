@@ -1,5 +1,8 @@
 package com.relay.push
 
+import com.relay.call.CallEngine
+import com.relay.call.IosRtc
+import com.relay.call.RtcClientFactory
 import com.relay.di.ensureKoinStarted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -14,6 +17,15 @@ object SharedBridge {
     fun start() {
         ensureKoinStarted()
         resolve<IosAppLifecycle>().start()
+    }
+
+    fun registerRtcFactory(factory: RtcClientFactory) {
+        IosRtc.factory = factory
+    }
+
+    fun onIncomingCallPush(callId: String, callerId: String, media: String, ringExpiresAt: String?) {
+        ensureKoinStarted()
+        resolve<CallEngine>().onIncomingCallPush(callId, callerId, media, ringExpiresAt)
     }
 
     fun registerApnsToken(token: String) {

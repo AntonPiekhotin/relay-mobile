@@ -11,6 +11,11 @@ sealed interface InboundFrame {
     data class MessageRead(val payload: MessageReadReceiptPayload) : InboundFrame
     data class Error(val payload: ErrorPayload) : InboundFrame
     data class Pong(val payload: PongPayload) : InboundFrame
+    data class CallSignalFrame(
+        val callId: String,
+        val fromUserId: String,
+        val signal: CallSignal
+    ) : InboundFrame
     data class Unknown(val type: String) : InboundFrame
     data class Malformed(val rawText: String, val cause: String) : InboundFrame
 }
@@ -33,6 +38,13 @@ fun parseInboundFrame(text: String): InboundFrame {
             FrameType.MESSAGE_READ ->
                 InboundFrame.MessageRead(payload.decode(MessageReadReceiptPayload.serializer()))
             FrameType.ERROR -> InboundFrame.Error(payload.decode(ErrorPayload.serializer()))
+            FrameType.CALL_SIGNAL -> payload.decode(CallSignalPayload.serializer()).let {
+                InboundFrame.CallSignalFrame(
+                    callId = it.callId,
+                    fromUserId = it.fromUserId,
+                    signal = parseCallSignal(it.signal)
+                )
+            }
             FrameType.PONG -> InboundFrame.Pong(
                 if (payload is JsonNull) PongPayload() else payload.decode(PongPayload.serializer())
             )

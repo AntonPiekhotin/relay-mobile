@@ -9,6 +9,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         SharedBridge.shared.start()
+        SharedBridge.shared.registerRtcFactory(factory: RelayRtcFactory())
         UNUserNotificationCenter.current().delegate = self
         application.registerForRemoteNotifications()
         return true

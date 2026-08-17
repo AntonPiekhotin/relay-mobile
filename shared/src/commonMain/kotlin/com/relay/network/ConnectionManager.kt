@@ -50,7 +50,7 @@ class ConnectionManager(
     private val config: AppConfig,
     private val session: SessionManager,
     private val scope: CoroutineScope
-) : SocketClient {
+) : SocketClient, SocketLifecycle {
     private val mutableState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     override val state: StateFlow<ConnectionState> = mutableState.asStateFlow()
 
@@ -60,12 +60,12 @@ class ConnectionManager(
     private var loopJob: Job? = null
     private var activeSocket: DefaultClientWebSocketSession? = null
 
-    fun start() {
+    override fun start() {
         if (loopJob?.isActive == true) return
         loopJob = scope.launch { connectionLoop() }
     }
 
-    fun stop() {
+    override fun stop() {
         loopJob?.cancel()
         loopJob = null
         val socket = activeSocket

@@ -62,6 +62,7 @@ kotlin {
             implementation(libs.androidx.security.crypto)
             implementation(libs.koin.android)
             implementation(libs.sqldelight.android.driver)
+            implementation(libs.webrtc.android)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

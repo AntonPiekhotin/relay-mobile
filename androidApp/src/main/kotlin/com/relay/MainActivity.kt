@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.relay.call.MicPermission
+import com.relay.call.MicPermissionBinder
 import com.relay.push.AppPresence
 import com.relay.push.EXTRA_DIALOG_ID
 import com.relay.push.FCM_DIALOG_ID
@@ -28,7 +30,9 @@ class MainActivity : ComponentActivity() {
     private val presence: AppPresence by inject()
     private val pushNavigator: PushNavigator by inject()
     private val permissionRequests: PushPermissionRequests by inject()
+    private val mic: MicPermission by inject()
     private val notifier by lazy { MessageNotifier(applicationContext) }
+    private lateinit var micRequests: MicPermissionBinder
 
     private var permissionAsked = false
 
@@ -39,6 +43,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         NotificationChannels.ensure(this)
+        micRequests = MicPermissionBinder(this, mic)
         routeFromPush(intent)
 
         lifecycleScope.launch {

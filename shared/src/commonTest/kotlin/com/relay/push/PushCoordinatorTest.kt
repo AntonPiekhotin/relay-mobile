@@ -1,12 +1,17 @@
 package com.relay.push
 
+import com.relay.call.CallEngine
 import com.relay.db.MessageStore
 import com.relay.network.MessageApiResult
 import com.relay.sync.Outbox
 import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
+import com.relay.testutil.FakeCallApi
 import com.relay.testutil.FakeMessageApi
+import com.relay.testutil.FakeRtcClientFactory
 import com.relay.testutil.FakeSocket
+import com.relay.testutil.FakeSocketLifecycle
+import com.relay.testutil.FakeUserRepository
 import com.relay.testutil.createTestDb
 import com.relay.testutil.wireMessage
 import kotlin.test.Test
@@ -15,6 +20,7 @@ import kotlin.test.assertIs
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 
 private const val DIALOG = "d1"
@@ -41,7 +47,24 @@ private class CoordinatorHarness(scope: TestScope) {
         scope = scope.backgroundScope,
         authenticatedUserId = { SELF }
     )
-    val coordinator = PushCoordinator(engine, store, presence)
+    val calls = CallEngine(
+        socket = socket,
+        api = FakeCallApi(),
+        rtcFactory = FakeRtcClientFactory(),
+        scope = scope.backgroundScope,
+        now = { scope.testScheduler.currentTime }
+    )
+    val lifecycle = FakeSocketLifecycle()
+    val users = FakeUserRepository()
+    val coordinator = PushCoordinator(
+        syncEngine = engine,
+        store = store,
+        presence = presence,
+        calls = calls,
+        connection = lifecycle,
+        users = users,
+        now = { scope.testScheduler.currentTime }
+    )
 
     fun serveHistory(vararg messages: String) {
         api.beforeHandler = { _, _, _ ->
@@ -139,11 +162,39 @@ class PushCoordinatorTest {
     }
 
     @Test
-    fun aCallPushIsIgnoredUntilTheCallPhase() = runTest {
+    fun aCallPushOpensTheSocketAndAsksForARingingNotification() = runTest {
         val harness = CoordinatorHarness(this)
+
         val display = harness.coordinator.handle(
-            PushEvent.IncomingCall("c1", "peer", "voice", null)
+            PushEvent.IncomingCall("c1", "peer", "audio", null)
         )
+
+        runCurrent()
+
+        val incoming = assertIs<PushDisplay.IncomingCall>(display)
+        assertEquals("c1", incoming.callId)
+        assertEquals(1, harness.lifecycle.starts)
+        assertEquals("c1", harness.calls.session.value?.callId)
+    }
+
+    @Test
+    fun aCallPushThatAlreadyRangOutIsDropped() = runTest {
+        val harness = CoordinatorHarness(this)
+
+        val display = harness.coordinator.handle(
+            PushEvent.IncomingCall("c2", "peer", "audio", ringExpiresAt = "1970-01-01T00:00:00Z")
+        )
+
         assertEquals(PushDisplay.Suppress, display)
+        assertEquals(0, harness.lifecycle.starts)
+    }
+
+    @Test
+    fun aMissedCallPushAsksForANotification() = runTest {
+        val harness = CoordinatorHarness(this)
+
+        val display = harness.coordinator.handle(PushEvent.MissedCall("c3", "peer", "audio"))
+
+        assertEquals("c3", assertIs<PushDisplay.MissedCall>(display).callId)
     }
 }

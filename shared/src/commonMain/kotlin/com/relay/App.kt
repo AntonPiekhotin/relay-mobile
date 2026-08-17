@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.relay.auth.AuthState
 import com.relay.ui.LoginScreen
 import com.relay.ui.SessionViewModel
+import com.relay.ui.call.CallHost
 import com.relay.ui.navigation.RelayNavHost
 import com.relay.ui.theme.RelayTheme
 import org.koin.compose.viewmodel.koinViewModel
@@ -36,7 +37,10 @@ fun App() {
                         onLogin = viewModel::login,
                         onRegister = viewModel::register
                     )
-                    is AuthState.LoggedIn -> RelayNavHost(onLogout = viewModel::logout)
+                    is AuthState.LoggedIn -> {
+                        RelayNavHost(onLogout = viewModel::logout)
+                        CallHost()
+                    }
                 }
             }
         }

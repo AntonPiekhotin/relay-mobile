@@ -116,7 +116,11 @@ Use `content-available: 1` for silent pushes that trigger a background fetch —
 
 ## 4. CallKit — the strict part
 
-*Relevant from phase 6 onward. Read before designing the call flow.*
+**Not used yet, and phase 6 shipped without it.** Calls work while the app is foregrounded: the
+socket is alive, the invite arrives as a frame, and the shared overlay rings. Everything below
+applies the moment a backgrounded app must ring — which needs PushKit, which needs the same
+`aps-environment` entitlement §1 is blocked on. Media, permissions and the audio session are already
+built (`docs/CALLS.md` §5); only the wake-up path is missing.
 
 **When a PushKit VoIP push arrives, you must report an incoming call to CallKit essentially immediately — within the same callback.** If you fail to, iOS terminates the app, and repeated failures cause the system to stop delivering VoIP pushes to your app entirely.
 
@@ -184,11 +188,14 @@ iosApp/
 ├── iosApp.xcodeproj
 ├── iosApp/
 │   ├── iOSApp.swift          # entry point, hosts the Compose view
-│   ├── AppDelegate.swift     # push registration, PushKit, CallKit
-│   ├── CallManager.swift     # CXProvider delegate
+│   ├── AppDelegate.swift     # push registration, RTC factory registration
+│   ├── RelayRtc.swift        # WebRTC peer connection, conforms to the shared RtcClient
 │   └── Info.plist
-└── Podfile                   # only if using webrtc-kmp
 ```
+
+**WebRTC is a Swift package, not a pod.** `github.com/stasel/WebRTC` is referenced from
+`iosApp.xcodeproj`; there is no `Podfile` and CocoaPods is not used. Xcode resolves it on first
+build.
 
 Gradle builds the shared framework as an Xcode build phase. `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` runs automatically — do not invoke it manually.
 
@@ -197,9 +204,10 @@ Gradle builds the shared framework as an Xcode build phase. `./gradlew :composeA
 | Key | Reason | Status |
 |---|---|---|
 | `UIBackgroundModes` → `remote-notification` | Background data pushes | **set** |
-| `UIBackgroundModes` → `voip`, `audio` | PushKit and call audio | phase 6 |
-| `NSMicrophoneUsageDescription` | Calls | phase 6 |
-| `NSCameraUsageDescription` | Video calls | phase 6 |
+| `UIBackgroundModes` → `audio` | Call audio | **set** |
+| `UIBackgroundModes` → `voip` | PushKit | blocked with CallKit (§4) |
+| `NSMicrophoneUsageDescription` | Calls | **set** |
+| `NSCameraUsageDescription` | Video calls | not until video ships |
 
 `UIBackgroundModes` is a plist key and needs no paid account — unlike the **Push Notifications
 capability**, which writes the `aps-environment` entitlement and does. Adding the background mode
@@ -218,10 +226,10 @@ With Compose Multiplatform the UI is Kotlin, so interop surface is small — mos
 ```kotlin
 // iosMain
 object SharedBridge {
-    fun registerPushToken(token: String, kind: String) { ... }
-    fun onIncomingCallPush(callId: String, callerId: String) { ... }
-    fun onCallAnswered(callId: String) { ... }
-    fun onCallEnded(callId: String) { ... }
+    fun registerApnsToken(token: String) { ... }
+    fun registerVoipToken(token: String) { ... }
+    fun registerRtcFactory(factory: RtcClientFactory) { ... }
+    fun onIncomingCallPush(callId: String, callerId: String, media: String, ringExpiresAt: String?)
 }
 ```
 

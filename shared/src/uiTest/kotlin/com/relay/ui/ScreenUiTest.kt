@@ -4,6 +4,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -33,6 +34,12 @@ import com.relay.ui.state.PeopleTab
 import com.relay.ui.state.PersonUi
 import com.relay.ui.state.ProfileState
 import com.relay.ui.state.ProfileUi
+import com.relay.ui.call.CALL_ACCEPT_TAG
+import com.relay.ui.call.CALL_DECLINE_TAG
+import com.relay.ui.call.CALL_HANGUP_TAG
+import com.relay.ui.call.CallScreen
+import com.relay.ui.state.CallActionsUi
+import com.relay.ui.state.CallUiState
 import com.relay.ui.theme.RelayTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -215,7 +222,8 @@ class ScreenUiTest {
                     onRetry = {},
                     onLoadOlder = {},
                     onBack = {},
-                    onDismissError = { dismissed += Unit }
+                    onDismissError = { dismissed += Unit },
+                    onCall = {}
                 )
             }
         }
@@ -236,7 +244,8 @@ class ScreenUiTest {
                     onRetry = {},
                     onLoadOlder = {},
                     onBack = {},
-                    onDismissError = {}
+                    onDismissError = {},
+                    onCall = {}
                 )
             }
         }
@@ -375,5 +384,88 @@ class ScreenUiTest {
             }
         }
         onNodeWithText("No contacts yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun anIncomingCallOffersAnswerAndDecline() = runComposeUiTest {
+        val answered = mutableListOf<Unit>()
+        val declined = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                CallScreen(
+                    state = CallUiState(
+                        visible = true,
+                        peerName = "Ada Lovelace",
+                        status = "Incoming call",
+                        actions = CallActionsUi.INCOMING
+                    ),
+                    onAccept = { answered += Unit },
+                    onDecline = { declined += Unit },
+                    onHangup = {},
+                    onToggleMute = {},
+                    onToggleSpeaker = {}
+                )
+            }
+        }
+        onNodeWithText("Ada Lovelace").assertIsDisplayed()
+        onNodeWithText("Incoming call").assertIsDisplayed()
+        onNodeWithTag(CALL_HANGUP_TAG).assertDoesNotExist()
+        onNodeWithTag(CALL_ACCEPT_TAG).performClick()
+        onNodeWithTag(CALL_DECLINE_TAG).performClick()
+        waitForIdle()
+        assertEquals(1, answered.size)
+        assertEquals(1, declined.size)
+    }
+
+    @Test
+    fun aCallInProgressOffersOnlyHangUpAndTheAudioToggles() = runComposeUiTest {
+        val hungUp = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                CallScreen(
+                    state = CallUiState(
+                        visible = true,
+                        peerName = "Ada Lovelace",
+                        status = "Connected",
+                        actions = CallActionsUi.IN_PROGRESS
+                    ),
+                    onAccept = {},
+                    onDecline = {},
+                    onHangup = { hungUp += Unit },
+                    onToggleMute = {},
+                    onToggleSpeaker = {}
+                )
+            }
+        }
+        onNodeWithTag(CALL_ACCEPT_TAG).assertDoesNotExist()
+        onNodeWithContentDescription("Mute microphone").assertIsDisplayed()
+        onNodeWithTag(CALL_HANGUP_TAG).performClick()
+        waitForIdle()
+        assertEquals(1, hungUp.size)
+    }
+
+    @Test
+    fun aFailedCallExplainsItselfAndDropsEveryAction() = runComposeUiTest {
+        setContent {
+            RelayTheme {
+                CallScreen(
+                    state = CallUiState(
+                        visible = true,
+                        peerName = "Ada Lovelace",
+                        status = "Call ended",
+                        actions = CallActionsUi.ENDED,
+                        failure = "That person is already in a call"
+                    ),
+                    onAccept = {},
+                    onDecline = {},
+                    onHangup = {},
+                    onToggleMute = {},
+                    onToggleSpeaker = {}
+                )
+            }
+        }
+        onNodeWithText("That person is already in a call").assertIsDisplayed()
+        onNodeWithTag(CALL_HANGUP_TAG).assertDoesNotExist()
+        onNodeWithTag(CALL_ACCEPT_TAG).assertDoesNotExist()
     }
 }

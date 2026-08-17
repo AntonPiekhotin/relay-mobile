@@ -55,4 +55,23 @@ class TimeFormatTest {
         assertEquals(dayKeyOf(NOON_2026_08_06, UTC), dayKeyOf(lateEvening, UTC))
         assertEquals(dayKeyOf(NOON_2026_08_06, UTC) + 1, dayKeyOf(earlyMorning, UTC))
     }
+
+    @Test
+    fun callDurationsAreMinutesAndSecondsUntilAnHour() {
+        assertEquals("00:00", formatDuration(0))
+        assertEquals("00:09", formatDuration(9_400))
+        assertEquals("01:05", formatDuration(65_000))
+        assertEquals("59:59", formatDuration(3_599_000))
+    }
+
+    @Test
+    fun longerCallsGrowAnHoursField() {
+        assertEquals("1:00:00", formatDuration(3_600_000))
+        assertEquals("2:03:04", formatDuration(2 * 3_600_000 + 3 * 60_000 + 4_000))
+    }
+
+    @Test
+    fun aClockSkewedBackwardsShowsZeroRatherThanANegativeDuration() {
+        assertEquals("00:00", formatDuration(-5_000))
+    }
 }

@@ -49,12 +49,26 @@ sealed interface ConnectionUi {
 data class ChatState(
     val dialogId: String = "",
     val title: String = "",
+    val peerId: String? = null,
     val messages: List<MessageUi> = emptyList(),
     val isLoadingOlder: Boolean = false,
     val hasMoreHistory: Boolean = false,
     val draft: String = "",
     val connection: ConnectionUi = ConnectionUi.Unknown,
     val error: String? = null
+)
+
+enum class CallActionsUi { INCOMING, IN_PROGRESS, ENDED }
+
+data class CallUiState(
+    val visible: Boolean = false,
+    val peerName: String = "",
+    val status: String = "",
+    val answeredAt: Long? = null,
+    val actions: CallActionsUi = CallActionsUi.IN_PROGRESS,
+    val muted: Boolean = false,
+    val speakerOn: Boolean = false,
+    val failure: String? = null
 )
 
 data class DialogListState(

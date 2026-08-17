@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
+import com.relay.call.MicPermission
+import com.relay.call.PlaceCallResult
 import com.relay.model.Dialog
 import com.relay.model.DialogSyncState
 import com.relay.model.Message
@@ -11,6 +13,7 @@ import com.relay.protocol.nowEpochMillis
 import com.relay.push.AppPresence
 import com.relay.push.PushPermissionRequests
 import com.relay.repository.ConnectionPhase
+import com.relay.repository.CallRepository
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.HISTORY_PAGE_SIZE
 import com.relay.repository.MessageRepository
@@ -31,6 +34,7 @@ import kotlinx.coroutines.launch
 const val INITIAL_VISIBLE_MESSAGES = 100L
 
 private const val SEND_FAILED = "Not signed in — your message was not sent"
+private const val MIC_DENIED = "Microphone access is needed for calls"
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(
@@ -40,6 +44,8 @@ class ChatViewModel(
     private val connection: ConnectionStatus,
     private val presence: AppPresence,
     private val permissionRequests: PushPermissionRequests,
+    private val calls: CallRepository,
+    private val mic: MicPermission,
     private val now: () -> Long = ::nowEpochMillis
 ) : ViewModel() {
 
@@ -101,6 +107,18 @@ class ChatViewModel(
         }
     }
 
+    fun call() {
+        val peerId = mutableState.value.peerId ?: return
+        viewModelScope.launch {
+            if (!mic.ensureGranted()) {
+                sendError.value = MIC_DENIED
+                return@launch
+            }
+            val result = calls.call(peerId, dialogId)
+            if (result is PlaceCallResult.Rejected) sendError.value = result.reason
+        }
+    }
+
     override fun onCleared() {
         presence.onDialogClosed(dialogId)
         super.onCleared()
@@ -134,6 +152,7 @@ class ChatViewModel(
         return ChatState(
             dialogId = dialogId,
             title = dialogTitleOf(chat.dialog?.title),
+            peerId = chat.dialog?.peerId,
             messages = chat.rows.toMessageUi(selfId, now(), chat.dialog?.peerReadAt),
             isLoadingOlder = extras.loading,
             hasMoreHistory = chat.syncState?.hasMoreHistory ?: false,

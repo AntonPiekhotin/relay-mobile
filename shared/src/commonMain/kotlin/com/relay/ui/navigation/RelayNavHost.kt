@@ -64,7 +64,8 @@ fun RelayNavHost(
                     onRetry = viewModel::retry,
                     onLoadOlder = viewModel::loadOlder,
                     onBack = back,
-                    onDismissError = viewModel::dismissError
+                    onDismissError = viewModel::dismissError,
+                    onCall = viewModel::call
                 )
             }
         }

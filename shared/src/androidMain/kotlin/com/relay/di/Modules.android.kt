@@ -4,6 +4,9 @@ import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import com.relay.auth.AndroidTokenStore
 import com.relay.auth.TokenStore
+import com.relay.call.MicPermission
+import com.relay.call.RtcClientFactory
+import com.relay.call.WebRtcClientFactory
 import com.relay.config.AppConfig
 import com.relay.db.RelayDb
 import com.relay.push.PushPlatform
@@ -19,6 +22,8 @@ private data class AndroidDevConfig(
 actual val platformModule: Module = module {
     single<AppConfig> { AndroidDevConfig() }
     single { PushPlatform("android") }
+    single<RtcClientFactory> { WebRtcClientFactory(androidContext()) }
+    single { MicPermission(grantedByPlatform = false) }
     single<TokenStore> { AndroidTokenStore(androidContext()) }
     single<SqlDriver> { AndroidSqliteDriver(RelayDb.Schema, androidContext(), "relay.db") }
 }

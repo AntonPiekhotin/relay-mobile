@@ -51,6 +51,18 @@ fun formatFullDate(epochMillis: Long, zone: TimeZone = TimeZone.currentSystemDef
     return "${date.day} ${MONTHS[date.month.number - 1]} ${date.year}"
 }
 
+fun formatDuration(elapsedMillis: Long): String {
+    val totalSeconds = (if (elapsedMillis > 0) elapsedMillis else 0) / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "$hours:${minutes.padded()}:${seconds.padded()}"
+    } else {
+        "${minutes.padded()}:${seconds.padded()}"
+    }
+}
+
 fun dayKeyOf(epochMillis: Long, zone: TimeZone = TimeZone.currentSystemDefault()): Long =
     localDateTimeOf(epochMillis, zone).date.toEpochDays().toLong()
 
@@ -59,3 +71,5 @@ private fun localDateTimeOf(epochMillis: Long, zone: TimeZone) =
     Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(zone)
 
 private fun Int.padded(): String = if (this < 10) "0$this" else toString()
+
+private fun Long.padded(): String = if (this < 10) "0$this" else toString()

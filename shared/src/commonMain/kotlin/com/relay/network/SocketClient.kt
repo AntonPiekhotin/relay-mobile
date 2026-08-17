@@ -5,6 +5,11 @@ import com.relay.protocol.InboundFrame
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
+interface SocketLifecycle {
+    fun start()
+    fun stop()
+}
+
 interface SocketClient {
     val state: StateFlow<ConnectionState>
     val frames: SharedFlow<InboundFrame>

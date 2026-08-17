@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -25,9 +26,11 @@ import com.relay.ui.components.Composer
 import com.relay.ui.components.ConnectionStrip
 import com.relay.ui.components.EmptyState
 import com.relay.ui.components.MessageList
+import com.relay.ui.components.PhoneGlyph
 import com.relay.ui.state.ChatState
 
 const val CHAT_ERROR_TAG = "chat-error"
+const val CHAT_CALL_TAG = "chat-call"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +42,7 @@ fun ChatScreen(
     onLoadOlder: () -> Unit,
     onBack: () -> Unit,
     onDismissError: () -> Unit,
+    onCall: () -> Unit,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState()
 ) {
@@ -47,7 +51,14 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = { Text(state.title) },
-                navigationIcon = { BackButton(onBack = onBack) }
+                navigationIcon = { BackButton(onBack = onBack) },
+                actions = {
+                    if (state.peerId != null) {
+                        IconButton(onClick = onCall, modifier = Modifier.testTag(CHAT_CALL_TAG)) {
+                            PhoneGlyph(contentDescription = "Call ${state.title}")
+                        }
+                    }
+                }
             )
         },
         bottomBar = {

@@ -137,9 +137,13 @@ sealed interface Route {
     data class Chat(val dialogId: String) : Route
     data object People : Route
     data object Profile : Route
-    data class Call(val callId: String) : Route
 }
 ```
+
+**The call screen is not a route.** `CallHost` renders above the whole `NavHost` whenever a call
+session exists, so ringing does not disturb the back stack and the user returns to exactly where
+they were when the call ends. On Android a `CallActivity` hosts the same composable for the
+lock-screen case. See `docs/CALLS.md`.
 
 The dialog list is the only top-level screen. Its app bar carries two icon actions — a search glyph
 opening `People` (which lands on the search tab; that screen is a finder first and a contact list
@@ -222,6 +226,8 @@ Build these as standalone, previewable composables:
 | `DialogList` | `LazyColumn` of `DialogRow` |
 | `Avatar` | Initials in a circle; `size` and `textStyle` are parameters |
 | `SearchGlyph` / `AccountGlyph` / `BackGlyph` | App-bar icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
+| `PhoneGlyph` / `MicrophoneGlyph` / `SpeakerGlyph` | Call controls, same `Canvas` approach; `PhoneGlyph` rotates 135° for decline and hang-up |
+| `CallScreen` | Full-screen call overlay: peer, status or talk timer, and the actions for the current stage |
 | `BackButton` | `IconButton` + `BackGlyph`, used as every sub-screen's `navigationIcon` |
 | `PersonRow` | Avatar and name only; the row itself opens the chat, the trailing button only adds or removes the contact |
 | `SwipeBackBox` | Left-edge drag-to-go-back wrapper applied in the nav host |
@@ -246,3 +252,5 @@ Each takes plain data and lambdas — no ViewModel, no DI, no side effects. That
 - [ ] Dark mode renders correctly on both platforms
 - [ ] Empty states render
 - [ ] Very long messages and unbroken strings wrap without breaking layout
+- [ ] An incoming call overlays whatever screen is open and restores it on hang-up
+- [ ] The talk timer ticks without recomposing the rest of the call screen

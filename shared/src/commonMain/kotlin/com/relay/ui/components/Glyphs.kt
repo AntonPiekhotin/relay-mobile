@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -12,12 +13,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 private val GLYPH_SIZE = 24.dp
 private const val STROKE_RATIO = 0.09f
+private const val HANDSET_TILT = -35f
+const val DECLINE_ROTATION = 135f
 
 @Composable
 fun SearchGlyph(
@@ -121,6 +125,131 @@ fun AccountGlyph(
             size = Size(size.width * 0.6f, size.height * 0.62f),
             style = Stroke(stroke, cap = StrokeCap.Round)
         )
+    }
+}
+
+@Composable
+fun PhoneGlyph(
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current,
+    rotationDegrees: Float = 0f
+) {
+    Canvas(modifier.size(GLYPH_SIZE).describedAs(contentDescription)) {
+        val stroke = size.minDimension * STROKE_RATIO
+        rotate(degrees = HANDSET_TILT + rotationDegrees) {
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(size.width * 0.34f, size.height * 0.10f),
+                size = Size(size.width * 0.32f, size.height * 0.24f),
+                cornerRadius = CornerRadius(size.width * 0.10f),
+                style = Stroke(stroke)
+            )
+            drawRoundRect(
+                color = tint,
+                topLeft = Offset(size.width * 0.34f, size.height * 0.66f),
+                size = Size(size.width * 0.32f, size.height * 0.24f),
+                cornerRadius = CornerRadius(size.width * 0.10f),
+                style = Stroke(stroke)
+            )
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.5f, size.height * 0.34f),
+                end = Offset(size.width * 0.5f, size.height * 0.66f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+@Composable
+fun MicrophoneGlyph(
+    contentDescription: String,
+    muted: Boolean,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    Canvas(modifier.size(GLYPH_SIZE).describedAs(contentDescription)) {
+        val stroke = size.minDimension * STROKE_RATIO
+        drawRoundRect(
+            color = tint,
+            topLeft = Offset(size.width * 0.38f, size.height * 0.16f),
+            size = Size(size.width * 0.24f, size.height * 0.42f),
+            cornerRadius = CornerRadius(size.width * 0.12f),
+            style = Stroke(stroke)
+        )
+        drawArc(
+            color = tint,
+            startAngle = 0f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(size.width * 0.26f, size.height * 0.40f),
+            size = Size(size.width * 0.48f, size.height * 0.34f),
+            style = Stroke(stroke, cap = StrokeCap.Round)
+        )
+        drawLine(
+            color = tint,
+            start = Offset(size.width * 0.5f, size.height * 0.74f),
+            end = Offset(size.width * 0.5f, size.height * 0.86f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        if (muted) {
+            drawLine(
+                color = tint,
+                start = Offset(size.width * 0.20f, size.height * 0.16f),
+                end = Offset(size.width * 0.80f, size.height * 0.84f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+@Composable
+fun SpeakerGlyph(
+    contentDescription: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    Canvas(modifier.size(GLYPH_SIZE).describedAs(contentDescription)) {
+        val stroke = size.minDimension * STROKE_RATIO
+        val cone = Path().apply {
+            moveTo(size.width * 0.20f, size.height * 0.38f)
+            lineTo(size.width * 0.32f, size.height * 0.38f)
+            lineTo(size.width * 0.48f, size.height * 0.22f)
+            lineTo(size.width * 0.48f, size.height * 0.78f)
+            lineTo(size.width * 0.32f, size.height * 0.62f)
+            lineTo(size.width * 0.20f, size.height * 0.62f)
+            close()
+        }
+        drawPath(
+            path = cone,
+            color = tint,
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+        if (enabled) {
+            drawArc(
+                color = tint,
+                startAngle = -50f,
+                sweepAngle = 100f,
+                useCenter = false,
+                topLeft = Offset(size.width * 0.40f, size.height * 0.30f),
+                size = Size(size.width * 0.32f, size.height * 0.40f),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = tint,
+                startAngle = -50f,
+                sweepAngle = 100f,
+                useCenter = false,
+                topLeft = Offset(size.width * 0.36f, size.height * 0.18f),
+                size = Size(size.width * 0.48f, size.height * 0.64f),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+        }
     }
 }
 

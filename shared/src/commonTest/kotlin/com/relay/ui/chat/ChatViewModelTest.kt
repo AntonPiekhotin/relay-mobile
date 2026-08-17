@@ -17,6 +17,8 @@ import com.relay.repository.ConnectionPhase
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.sync.Outbox
 import com.relay.sync.ReadReceipts
+import com.relay.call.MicPermission
+import com.relay.testutil.FakeCallRepository
 import com.relay.testutil.FakeConnectionStatus
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
@@ -84,6 +86,8 @@ private class ChatHarness(scope: TestScope) {
 
     val presence = AppPresence()
     val permissionRequests = PushPermissionRequests()
+    val calls = FakeCallRepository()
+    val mic = MicPermission(grantedByPlatform = true)
 
     fun viewModel() = ChatViewModel(
         dialogId = DIALOG,
@@ -92,6 +96,8 @@ private class ChatHarness(scope: TestScope) {
         connection = connection,
         presence = presence,
         permissionRequests = permissionRequests,
+        calls = calls,
+        mic = mic,
         now = { FIXED_NOW }
     )
 

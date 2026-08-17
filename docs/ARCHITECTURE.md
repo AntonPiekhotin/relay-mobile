@@ -55,6 +55,7 @@ relay-mobile/
 │   │   │   ├── network/       # Ktor HTTP + WebSocket clients
 │   │   │   ├── db/            # SQLDelight schema (.sq) + DAOs
 │   │   │   ├── sync/          # sync engine, outbox, catch-up
+│   │   │   ├── call/          # call state machine, RtcClient port (see docs/CALLS.md)
 │   │   │   ├── repository/    # the UI-facing API
 │   │   │   ├── auth/          # token storage, refresh
 │   │   │   ├── ui/            # composables, theme, navigation
@@ -78,6 +79,7 @@ relay-mobile/
 | `ui` | `repository`, `di` | Touch `network`, `db`, or `sync` directly |
 | `repository` | `db`, `sync` | Expose Ktor or SQLDelight types outward |
 | `sync` | `network`, `db`, `protocol` | Know anything about the UI |
+| `call` | `network`, `protocol` | Know anything about the UI; hold media code |
 | `network` | `protocol` | Write to the DB directly |
 | `db` | — | Depend on anything above it |
 | `protocol` | — | Depend on anything |

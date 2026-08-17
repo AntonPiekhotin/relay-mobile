@@ -10,6 +10,12 @@ object FrameType {
     const val PING = "ping"
     const val PONG = "pong"
     const val NOTIFICATION_NEW = "notification.new"
+    const val CALL_INVITE = "call.invite"
+    const val CALL_ACCEPT = "call.accept"
+    const val CALL_REJECT = "call.reject"
+    const val CALL_ICE = "call.ice"
+    const val CALL_HANGUP = "call.hangup"
+    const val CALL_SIGNAL = "call.signal"
 }
 
 object ErrorCode {
@@ -20,6 +26,10 @@ object ErrorCode {
     const val NOT_A_PARTICIPANT = "NOT_A_PARTICIPANT"
     const val INVALID_REQUEST = "INVALID_REQUEST"
     const val INTERNAL = "INTERNAL"
+    const val USER_BUSY = "USER_BUSY"
+    const val CALL_NOT_FOUND = "CALL_NOT_FOUND"
+    const val INVALID_CALL_STATE = "INVALID_CALL_STATE"
+    const val CALL_SIGNAL_FAILED = "CALL_SIGNAL_FAILED"
 
     val retryable = setOf(SEND_FAILED, INTERNAL)
 }

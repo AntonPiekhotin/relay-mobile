@@ -115,11 +115,13 @@ Channels: separate channels for messages (default importance) and calls (high im
 
 ## 5. Incoming calls
 
-*Phase 6.* Two options, in order of preference:
+**Built, with the full-screen intent, not `ConnectionService`.** The call logic lives in
+`docs/CALLS.md` §4; this section is the Android-specific part of it.
 
-**`ConnectionService`** — integrates with the system dialer, handles interaction with real phone calls, appears in call history. More setup; the correct choice for a real product.
-
-**Full-screen intent** — simpler, shows a custom call screen over the lock screen.
+`ConnectionService` remains the better answer for a real product — system dialer integration,
+interaction with cellular calls, an entry in the system call log — and is the upgrade path. It was
+not taken here because it is substantially more setup for behaviour a full-screen intent already
+covers on a device that is awake.
 
 ```kotlin
 val notification = NotificationCompat.Builder(context, CALL_CHANNEL)
@@ -129,9 +131,17 @@ val notification = NotificationCompat.Builder(context, CALL_CHANNEL)
     .build()
 ```
 
-On Android 14+ this requires the `USE_FULL_SCREEN_INTENT` permission, which is granted by default only for calling and alarm apps — verify at runtime and degrade to a heads-up notification if unavailable.
+On Android 14+ this requires the `USE_FULL_SCREEN_INTENT` permission, which is granted by default only for calling and alarm apps — when it is not held the notification degrades to a heads-up and the call still works.
 
 Unlike iOS, Android imposes no obligation to report the call within a deadline. The constraint is only that a high-priority FCM push must arrive.
+
+**A push is not the only trigger.** The gateway pushes only when the callee is unreachable, so a
+backgrounded app that still holds its socket receives the invite as a frame and no push.
+`RelayApplication` watches the call session and posts the same notification whenever a call reaches
+`INCOMING` while `AppPresence` reports the app is not foregrounded.
+
+**An answered call needs a `microphone` foreground service.** Android cuts microphone access to a
+backgrounded process without one; `CallForegroundService` runs for the life of the call.
 
 ---
 
@@ -144,8 +154,13 @@ Unlike iOS, Android imposes no obligation to report the call within a deadline. 
 | `RECORD_AUDIO` | Calls | Runtime |
 | `CAMERA` | Video calls | Runtime |
 | `USE_FULL_SCREEN_INTENT` | Calls, Android 14+ | Special |
+| `FOREGROUND_SERVICE_MICROPHONE` | Calls | Normal; the service type must match |
 
 Request at the point of use. Requesting notification permission on first launch produces a high denial rate; ask when the user sends their first message instead.
+
+`RECORD_AUDIO` is wired the same way as notifications: shared `MicPermission` exposes a prompt flow,
+`MicPermissionBinder` drives the launcher from `MainActivity` and `CallActivity`, and the caller
+awaits the answer before placing or answering the call.
 
 **How that is wired without leaking an Activity:** `ChatViewModel` calls
 `PushPermissionRequests.request()` after a successful send; `MainActivity` collects that flow and

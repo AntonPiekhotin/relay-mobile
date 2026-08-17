@@ -2,21 +2,26 @@ package com.relay.di
 
 import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
+import com.relay.call.CallEngine
+import com.relay.call.RtcClientFactory
 import com.relay.concurrency.ioDispatcher
 import com.relay.db.ContactStore
 import com.relay.db.MessageStore
 import com.relay.db.PushStore
 import com.relay.db.RelayDb
 import com.relay.network.AuthApi
+import com.relay.network.CallApi
 import com.relay.network.ConnectionManager
 import com.relay.network.HttpClientFactory
 import com.relay.network.KtorAuthApi
+import com.relay.network.KtorCallApi
 import com.relay.network.KtorMessageApi
 import com.relay.network.KtorNotificationApi
 import com.relay.network.KtorUserApi
 import com.relay.network.MessageApi
 import com.relay.network.NotificationApi
 import com.relay.network.SocketClient
+import com.relay.network.SocketLifecycle
 import com.relay.network.UserApi
 import com.relay.push.AppPresence
 import com.relay.push.DeviceTokenRegistrar
@@ -24,6 +29,8 @@ import com.relay.push.PushCoordinator
 import com.relay.push.PushNavigator
 import com.relay.push.PushPermissionRequests
 import com.relay.push.PushPlatform
+import com.relay.repository.CallRepository
+import com.relay.repository.CallRepositoryImpl
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.repository.MessageRepositoryImpl
@@ -35,6 +42,7 @@ import com.relay.sync.Outbox
 import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.ui.SessionViewModel
+import com.relay.ui.call.CallViewModel
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.dialogs.DialogListViewModel
 import com.relay.ui.people.PeopleViewModel
@@ -54,10 +62,12 @@ val commonModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     single { ConnectionManager(get(), get(), get(), get()) }
     single<SocketClient> { get<ConnectionManager>() }
+    single<SocketLifecycle> { get<ConnectionManager>() }
     single { RelayDb(get()) }
     single { MessageStore(get(), ioDispatcher()) }
     single { PushStore(get(), ioDispatcher(), get<PushPlatform>().name) }
     single<MessageApi> { KtorMessageApi(get(), get(), get()) }
+    single<CallApi> { KtorCallApi(get(), get(), get()) }
     single<NotificationApi> { KtorNotificationApi(get(), get(), get()) }
     single { Outbox(get(), get(), get(), get()) }
     single { ReadReceipts(get(), get()) }
@@ -67,10 +77,12 @@ val commonModule = module {
             (session.state.value as? AuthState.LoggedIn)?.userId
         }
     }
+    single { CallEngine(get(), get(), get<RtcClientFactory>(), get()) }
+    single<CallRepository> { CallRepositoryImpl(get(), get()) }
     single { AppPresence() }
     single { PushPermissionRequests() }
     single { PushNavigator() }
-    single { PushCoordinator(get(), get(), get()) }
+    single { PushCoordinator(get(), get(), get(), get(), get(), get()) }
     single { DeviceTokenRegistrar(get(), get(), get(), get()) }
     single<MessageRepository> { MessageRepositoryImpl(get(), get(), get(), get(), get()) }
     single { ContactStore(get(), ioDispatcher()) }
@@ -78,9 +90,12 @@ val commonModule = module {
     single<UserRepository> { UserRepositoryImpl(get(), get()) }
     single { PeerNameResolver(get(), get(), get(), get()) }
     single<ConnectionStatus> { SocketConnectionStatus(get()) }
-    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
-    factory { (dialogId: String) -> ChatViewModel(dialogId, get(), get(), get(), get(), get()) }
+    factory { (dialogId: String) ->
+        ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get())
+    }
+    factory { CallViewModel(get(), get()) }
     factory { PeopleViewModel(get(), get()) }
     factory { ProfileViewModel(get()) }
 }
