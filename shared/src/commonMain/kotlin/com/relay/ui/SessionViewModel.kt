@@ -10,6 +10,7 @@ import com.relay.db.ContactStore
 import com.relay.db.MessageStore
 import com.relay.network.ConnectionManager
 import com.relay.network.ConnectionState
+import com.relay.presence.PresenceEngine
 import com.relay.push.DeviceTokenRegistrar
 import com.relay.repository.PeerNameResolver
 import com.relay.sync.Outbox
@@ -28,7 +29,8 @@ class SessionViewModel(
     private val contacts: ContactStore,
     private val peerNames: PeerNameResolver,
     private val pushTokens: DeviceTokenRegistrar,
-    private val calls: CallEngine
+    private val calls: CallEngine,
+    private val peerPresence: PresenceEngine
 ) : ViewModel() {
 
     val authState: StateFlow<AuthState> = session.state
@@ -48,6 +50,7 @@ class SessionViewModel(
                     is AuthState.LoggedIn -> {
                         syncEngine.start()
                         calls.start()
+                        peerPresence.start()
                         outbox.start()
                         peerNames.start()
                         pushTokens.start()
@@ -56,6 +59,7 @@ class SessionViewModel(
                     is AuthState.LoggedOut -> {
                         connection.stop()
                         calls.stop()
+                        peerPresence.stop()
                         outbox.stop()
                         peerNames.stop()
                         pushTokens.stop()

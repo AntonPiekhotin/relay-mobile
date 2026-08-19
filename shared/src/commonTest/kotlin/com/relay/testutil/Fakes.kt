@@ -26,6 +26,9 @@ import com.relay.protocol.ErrorPayload
 import com.relay.protocol.InboundFrame
 import com.relay.protocol.MessageNewPayload
 import com.relay.protocol.MessageReadReceiptPayload
+import com.relay.protocol.PresenceStatusWire
+import com.relay.protocol.PresenceUpdatePayload
+import com.relay.protocol.TypingReceiptPayload
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -206,6 +209,19 @@ fun readReceiptFrame(
 
 fun errorFrame(code: String, refId: String?): InboundFrame.Error =
     InboundFrame.Error(ErrorPayload(code = code, message = null, refId = refId))
+
+fun presenceUpdateFrame(
+    userId: String = "peer",
+    status: String = PresenceStatusWire.ONLINE,
+    lastSeen: String? = null
+): InboundFrame.PresenceUpdate =
+    InboundFrame.PresenceUpdate(PresenceUpdatePayload(userId, status, lastSeen))
+
+fun typingFrame(
+    dialogId: String = "d1",
+    userId: String = "peer"
+): InboundFrame.TypingStart =
+    InboundFrame.TypingStart(TypingReceiptPayload(dialogId, userId))
 
 @OptIn(ExperimentalEncodingApi::class)
 fun testJwt(subject: String): String {

@@ -51,6 +51,23 @@ fun formatFullDate(epochMillis: Long, zone: TimeZone = TimeZone.currentSystemDef
     return "${date.day} ${MONTHS[date.month.number - 1]} ${date.year}"
 }
 
+fun formatLastSeen(
+    epochMillis: Long,
+    nowMillis: Long,
+    zone: TimeZone = TimeZone.currentSystemDefault()
+): String {
+    val moment = localDateTimeOf(epochMillis, zone)
+    return when (val daysApart = dayKeyOf(nowMillis, zone) - dayKeyOf(epochMillis, zone)) {
+        0L -> "at ${formatClockTime(epochMillis, zone)}"
+        1L -> "yesterday at ${formatClockTime(epochMillis, zone)}"
+        else -> if (daysApart in 2L..6L) {
+            "on ${WEEKDAYS[moment.date.dayOfWeek.isoDayNumber - 1]}"
+        } else {
+            "on ${moment.date.day} ${MONTHS[moment.date.month.number - 1]}"
+        }
+    }
+}
+
 fun formatDuration(elapsedMillis: Long): String {
     val totalSeconds = (if (elapsedMillis > 0) elapsedMillis else 0) / 1000
     val hours = totalSeconds / 3600

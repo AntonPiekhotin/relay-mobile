@@ -47,6 +47,34 @@ data class MessageReadReceiptPayload(
 )
 
 @Serializable
+data class PresenceDialogPayload(
+    @SerialName("dialog_id") val dialogId: String
+)
+
+@Serializable
+data class PresenceUpdatePayload(
+    @SerialName("user_id") val userId: String,
+    @SerialName("status") val status: String,
+    @SerialName("last_seen") val lastSeen: String? = null
+)
+
+@Serializable
+data class TypingStartPayload(
+    @SerialName("dialog_id") val dialogId: String
+)
+
+@Serializable
+data class TypingReceiptPayload(
+    @SerialName("dialog_id") val dialogId: String,
+    @SerialName("user_id") val userId: String
+)
+
+object PresenceStatusWire {
+    const val ONLINE = "online"
+    const val OFFLINE = "offline"
+}
+
+@Serializable
 data class ErrorPayload(
     @SerialName("code") val code: String,
     @SerialName("message") val message: String? = null,

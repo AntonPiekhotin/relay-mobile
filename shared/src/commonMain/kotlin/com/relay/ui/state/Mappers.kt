@@ -8,17 +8,22 @@ import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
 import com.relay.network.CallHistoryEntryResponse
+import com.relay.presence.PeerPresence
 import com.relay.repository.ConnectionPhase
 import com.relay.ui.format.dayKeyOf
 import com.relay.ui.format.formatClockTime
 import com.relay.ui.format.formatDaySeparator
 import com.relay.ui.format.formatDuration
 import com.relay.ui.format.formatFullDate
+import com.relay.ui.format.formatLastSeen
 import com.relay.ui.format.formatListTimestamp
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 const val UNRESOLVED_PEER_TITLE = "Unknown user"
+const val TYPING_SUBTITLE = "typing…"
+const val ONLINE_SUBTITLE = "online"
+const val OFFLINE_SUBTITLE = "offline"
 
 private const val MISSED_STATUS = "MISSED"
 private const val OUTGOING_DIRECTION = "OUTGOING"
@@ -26,6 +31,15 @@ private const val MILLIS_PER_SECOND = 1000L
 
 fun dialogTitleOf(title: String?): String =
     title?.takeIf { it.isNotBlank() } ?: UNRESOLVED_PEER_TITLE
+
+fun chatSubtitleOf(presence: PeerPresence?, isTyping: Boolean, nowMillis: Long): String? =
+    when {
+        isTyping -> TYPING_SUBTITLE
+        presence == null -> null
+        presence.online -> ONLINE_SUBTITLE
+        presence.lastSeenAt != null -> "last seen ${formatLastSeen(presence.lastSeenAt, nowMillis)}"
+        else -> OFFLINE_SUBTITLE
+    }
 
 fun ConnectionPhase.toConnectionUi(): ConnectionUi = when (this) {
     ConnectionPhase.LIVE -> ConnectionUi.Live

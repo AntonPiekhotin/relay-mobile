@@ -98,7 +98,9 @@ Build order — do not skip ahead, each phase depends on the previous:
       notification presenter, `AppDelegate` — but **blocked on a paid Apple Developer account**:
       without the `aps-environment` entitlement no remote push is delivered, not even via
       `simctl push`. See `docs/IOS.md` §1 before touching it.
-- [ ] **5. Presence / typing**
+- [x] **5. Presence / typing** — subscribe-on-demand per open chat (`PresenceEngine`, ephemeral,
+      no DB). Header subtitle shows online / last seen / typing; typing sends are throttled to
+      1 per 3s and the indicator expires client-side after 5s. See `docs/PROTOCOL.md` §4.2.
 - [x] **6. Calls** — 1:1 audio, signaling + WebRTC media on both platforms. **Foreground only:**
       no CallKit and no ConnectionService, so iOS cannot ring a backgrounded app (same
       `aps-environment` blocker as phase 4) and Android rings via a full-screen intent. Read
@@ -108,13 +110,13 @@ Build order — do not skip ahead, each phase depends on the previous:
 
 The backend is ahead of the client in some areas and behind in others. Current backend state:
 
-- **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, call-log / ICE-server / device-token REST endpoints.
+- **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, presence/typing (`presence.subscribe`/`unsubscribe`, `presence.update`, `typing.start` — see `docs/PROTOCOL.md` §4.2), call-log / ICE-server / device-token REST endpoints.
 - **Implemented (client-facing REST):** profile/search/contacts (`/api/v1/user/**`), and `POST /api/v1/message/dialogs` — opening the direct dialog with a peer, the only way a client obtains a dialog id.
 - **Implemented (push):** notification-service consumes the `notifications` topic and fans out to FCM
   (`FcmPushSender`, behind `relay.push.fcm.enabled`). Device tokens register through
   `PUT /api/v1/notification/device-tokens`. Payloads are camelCase `data` keys with a `kind` of
   `MESSAGE_NEW`, `INCOMING_CALL`, or `MISSED_CALL` — see `docs/PROTOCOL.md` §5.5.
-- **NOT implemented:** REST fallback send (still `/internal`-only), presence, typing.
+- **NOT implemented:** REST fallback send (still `/internal`-only).
 
 **Consequence:** the client's REST fallback send is built against the target contract in
 `docs/PROTOCOL.md` §5.2 and stays inert until the backend ships it — do not report its `404`s as

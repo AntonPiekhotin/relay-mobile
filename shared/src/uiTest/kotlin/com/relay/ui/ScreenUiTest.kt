@@ -19,6 +19,7 @@ import com.relay.ui.components.SwipeBackBox
 import com.relay.ui.calls.CALLS_RETRY_TAG
 import com.relay.ui.calls.CallsScreen
 import com.relay.ui.chat.CHAT_ERROR_TAG
+import com.relay.ui.chat.CHAT_SUBTITLE_TAG
 import com.relay.ui.chat.ChatScreen
 import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.home.HomeBottomBar
@@ -250,6 +251,45 @@ class ScreenUiTest {
             }
         }
         onNodeWithTag(CHAT_ERROR_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun theChatHeaderShowsThePresenceSubtitleOnlyWhenKnown() = runComposeUiTest {
+        setContent {
+            RelayTheme {
+                ChatScreen(
+                    state = ChatState(dialogId = "d1", title = "Ada", subtitle = "online"),
+                    onDraftChange = {},
+                    onSend = {},
+                    onRetry = {},
+                    onLoadOlder = {},
+                    onBack = {},
+                    onDismissError = {},
+                    onCall = {}
+                )
+            }
+        }
+        onNodeWithTag(CHAT_SUBTITLE_TAG).assertIsDisplayed()
+        onNodeWithText("online").assertIsDisplayed()
+    }
+
+    @Test
+    fun aChatWithoutPresenceShowsNoSubtitle() = runComposeUiTest {
+        setContent {
+            RelayTheme {
+                ChatScreen(
+                    state = ChatState(dialogId = "d1", title = "Ada"),
+                    onDraftChange = {},
+                    onSend = {},
+                    onRetry = {},
+                    onLoadOlder = {},
+                    onBack = {},
+                    onDismissError = {},
+                    onCall = {}
+                )
+            }
+        }
+        onNodeWithTag(CHAT_SUBTITLE_TAG).assertDoesNotExist()
     }
 
     @Test

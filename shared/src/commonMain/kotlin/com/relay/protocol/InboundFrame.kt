@@ -16,6 +16,8 @@ sealed interface InboundFrame {
         val fromUserId: String,
         val signal: CallSignal
     ) : InboundFrame
+    data class PresenceUpdate(val payload: PresenceUpdatePayload) : InboundFrame
+    data class TypingStart(val payload: TypingReceiptPayload) : InboundFrame
     data class Unknown(val type: String) : InboundFrame
     data class Malformed(val rawText: String, val cause: String) : InboundFrame
 }
@@ -45,6 +47,10 @@ fun parseInboundFrame(text: String): InboundFrame {
                     signal = parseCallSignal(it.signal)
                 )
             }
+            FrameType.PRESENCE_UPDATE ->
+                InboundFrame.PresenceUpdate(payload.decode(PresenceUpdatePayload.serializer()))
+            FrameType.TYPING_START ->
+                InboundFrame.TypingStart(payload.decode(TypingReceiptPayload.serializer()))
             FrameType.PONG -> InboundFrame.Pong(
                 if (payload is JsonNull) PongPayload() else payload.decode(PongPayload.serializer())
             )

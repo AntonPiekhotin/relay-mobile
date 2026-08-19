@@ -39,6 +39,34 @@ fun messageReadFrame(
         )
     )
 
+fun presenceSubscribeFrame(dialogId: String, frameId: String = newFrameId()): Envelope =
+    presenceDialogFrame(FrameType.PRESENCE_SUBSCRIBE, dialogId, frameId)
+
+fun presenceUnsubscribeFrame(dialogId: String, frameId: String = newFrameId()): Envelope =
+    presenceDialogFrame(FrameType.PRESENCE_UNSUBSCRIBE, dialogId, frameId)
+
+fun typingStartFrame(dialogId: String, frameId: String = newFrameId()): Envelope =
+    Envelope(
+        type = FrameType.TYPING_START,
+        id = frameId,
+        ts = nowEpochMillis(),
+        payload = WireJson.encodeToJsonElement(
+            TypingStartPayload.serializer(),
+            TypingStartPayload(dialogId = dialogId)
+        )
+    )
+
+private fun presenceDialogFrame(type: String, dialogId: String, frameId: String): Envelope =
+    Envelope(
+        type = type,
+        id = frameId,
+        ts = nowEpochMillis(),
+        payload = WireJson.encodeToJsonElement(
+            PresenceDialogPayload.serializer(),
+            PresenceDialogPayload(dialogId = dialogId)
+        )
+    )
+
 fun pingFrame(frameId: String = newFrameId()): Envelope =
     Envelope(
         type = FrameType.PING,

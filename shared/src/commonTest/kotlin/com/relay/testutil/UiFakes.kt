@@ -9,14 +9,17 @@ import com.relay.model.SearchPage
 import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
+import com.relay.presence.PeerPresence
 import com.relay.repository.ConnectionPhase
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.repository.OpenDialogResult
+import com.relay.repository.PresenceRepository
 import com.relay.repository.UserRepository
 import com.relay.repository.UserResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 
@@ -26,6 +29,38 @@ class FakeConnectionStatus(initial: ConnectionPhase = ConnectionPhase.LIVE) : Co
 
     fun emit(next: ConnectionPhase) {
         mutablePhase.value = next
+    }
+}
+
+class FakePresenceRepository : PresenceRepository {
+    private val mutablePresence = MutableStateFlow<Map<String, PeerPresence>>(emptyMap())
+    override val presence: StateFlow<Map<String, PeerPresence>> = mutablePresence.asStateFlow()
+
+    private val mutableTyping = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    override val typing: StateFlow<Map<String, Set<String>>> = mutableTyping.asStateFlow()
+
+    val openedDialogs = mutableListOf<String>()
+    val closedDialogs = mutableListOf<String>()
+    val typingActivityDialogs = mutableListOf<String>()
+
+    override fun dialogOpened(dialogId: String) {
+        openedDialogs += dialogId
+    }
+
+    override fun dialogClosed(dialogId: String) {
+        closedDialogs += dialogId
+    }
+
+    override fun typingActivity(dialogId: String) {
+        typingActivityDialogs += dialogId
+    }
+
+    fun emitPresence(userId: String, presence: PeerPresence) {
+        mutablePresence.value = mutablePresence.value + (userId to presence)
+    }
+
+    fun emitTyping(dialogId: String, userIds: Set<String>) {
+        mutableTyping.value = mutableTyping.value + (dialogId to userIds)
     }
 }
 

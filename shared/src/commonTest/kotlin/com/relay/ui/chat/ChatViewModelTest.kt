@@ -20,7 +20,9 @@ import com.relay.sync.ReadReceipts
 import com.relay.call.MicPermission
 import com.relay.testutil.FakeCallRepository
 import com.relay.testutil.FakeConnectionStatus
+import com.relay.presence.PeerPresence
 import com.relay.testutil.FakeMessageApi
+import com.relay.testutil.FakePresenceRepository
 import com.relay.testutil.FakeSocket
 import com.relay.testutil.FakeTokenStore
 import com.relay.testutil.createTestDb
@@ -28,6 +30,8 @@ import com.relay.testutil.testJwt
 import com.relay.testutil.wireMessage
 import com.relay.ui.state.ConnectionUi
 import com.relay.ui.state.MessageStatusUi
+import com.relay.ui.state.ONLINE_SUBTITLE
+import com.relay.ui.state.TYPING_SUBTITLE
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -87,6 +91,7 @@ private class ChatHarness(scope: TestScope) {
     val presence = AppPresence()
     val permissionRequests = PushPermissionRequests()
     val calls = FakeCallRepository()
+    val peerPresence = FakePresenceRepository()
     val mic = MicPermission(grantedByPlatform = true)
 
     fun viewModel() = ChatViewModel(
@@ -97,6 +102,7 @@ private class ChatHarness(scope: TestScope) {
         presence = presence,
         permissionRequests = permissionRequests,
         calls = calls,
+        peerPresence = peerPresence,
         mic = mic,
         now = { FIXED_NOW }
     )
@@ -440,6 +446,77 @@ class ChatViewModelTest {
 
         assertEquals(stored, viewModel.state.value.messages.size)
         assertEquals(0, harness.api.beforeCalls)
+    }
+
+    @Test
+    fun openingTheChatSubscribesToPresence() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.viewModel()
+        runCurrent()
+
+        assertEquals(listOf(DIALOG), harness.peerPresence.openedDialogs)
+    }
+
+    @Test
+    fun peerPresenceIsSurfacedAsTheSubtitle() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.store.upsertDialog(DIALOG, "direct", null, null, "peer")
+        val viewModel = harness.viewModel()
+        runCurrent()
+        assertNull(viewModel.state.value.subtitle)
+
+        harness.peerPresence.emitPresence("peer", PeerPresence(online = true, lastSeenAt = null))
+        advanceUntilIdle()
+
+        assertEquals(ONLINE_SUBTITLE, viewModel.state.value.subtitle)
+        assertEquals(false, viewModel.state.value.isPeerTyping)
+    }
+
+    @Test
+    fun aTypingPeerOverridesThePresenceSubtitle() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.store.upsertDialog(DIALOG, "direct", null, null, "peer")
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        harness.peerPresence.emitPresence("peer", PeerPresence(online = true, lastSeenAt = null))
+        harness.peerPresence.emitTyping(DIALOG, setOf("peer"))
+        advanceUntilIdle()
+
+        assertEquals(TYPING_SUBTITLE, viewModel.state.value.subtitle)
+        assertTrue(viewModel.state.value.isPeerTyping)
+    }
+
+    @Test
+    fun typingInAnotherDialogDoesNotMarkThisPeerAsTyping() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        harness.store.upsertDialog(DIALOG, "direct", null, null, "peer")
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        harness.peerPresence.emitTyping("other-dialog", setOf("peer"))
+        advanceUntilIdle()
+
+        assertEquals(false, viewModel.state.value.isPeerTyping)
+    }
+
+    @Test
+    fun editingTheDraftReportsTypingActivity() = runTest {
+        val harness = ChatHarness(this)
+        harness.logIn()
+        val viewModel = harness.viewModel()
+        runCurrent()
+
+        viewModel.onDraftChange("h")
+        viewModel.onDraftChange("he")
+        assertEquals(listOf(DIALOG, DIALOG), harness.peerPresence.typingActivityDialogs)
+
+        viewModel.onDraftChange("")
+        assertEquals(2, harness.peerPresence.typingActivityDialogs.size)
     }
 
     @Test

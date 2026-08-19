@@ -13,7 +13,7 @@
 | Transport | Used for | Base |
 |---|---|---|
 | HTTPS | History, dialog list, profile, REST fallback send | `https://<host>/api` |
-| WSS | Real-time send, delivery, (later) presence and call signaling | `wss://<host>/ws` |
+| WSS | Real-time send, delivery, presence, typing, call signaling | `wss://<host>/ws` |
 
 **Rule: pull over HTTP, push over WebSocket.** History and pagination are HTTP-only — never request history over the socket. Large payloads on the socket cause head-of-line blocking that delays time-critical frames.
 
@@ -244,20 +244,97 @@ the ping's `id`. Missing two consecutive pongs → treat the connection as dead 
 Heartbeating is **client-driven only**: the server never initiates a ping and currently enforces
 no idle timeout, so a half-open socket is detected by the client or not at all.
 
-### 4.2 Presence and typing — NOT YET IMPLEMENTED
+### 4.2 Presence and typing — implemented
 
-Do not build against these until the backend ships them.
+> **The payload keys are `snake_case`, like every other frame.** Earlier drafts of this section
+> listed them as `dialogId` / `userId` / `lastSeen`; that was a sketch and was never built. §3 is the
+> rule: `dialog_id`, `user_id`, `last_seen`, `status`.
 
 | Type | Dir | Payload |
 |---|---|---|
-| `presence.subscribe` | C→S | `dialogId` |
-| `presence.unsubscribe` | C→S | `dialogId` |
-| `presence.update` | S→C | `userId`, `status`, `lastSeen?` |
-| `typing.start` | both | `dialogId`, `userId` (S→C only) |
+| `presence.subscribe` | C→S | `dialog_id` |
+| `presence.unsubscribe` | C→S | `dialog_id` |
+| `presence.update` | S→C | `user_id`, `status`, `last_seen` |
+| `typing.start` | C→S | `dialog_id` |
+| `typing.start` | S→C | `dialog_id`, `user_id` |
 
-Presence is **subscribe-on-demand**: subscribe when a conversation opens, unsubscribe when it closes. Never expect presence for conversations not on screen.
+All three inbound frames require an envelope `id` and a non-blank `payload.dialog_id`, or they yield
+`BAD_FRAME`. **Never send a user id** on any of them — the subject comes from the authenticated
+socket, and one in the payload is discarded.
 
-Typing: throttle to at most one emission per 3 seconds while typing, never per keystroke. Expire the indicator client-side after ~5s of silence — do not rely on a stop frame arriving.
+#### `presence.subscribe` (C→S)
+
+```json
+{
+  "v": 1, "type": "presence.subscribe", "id": "<any UUID>", "ts": 1730000000000,
+  "payload": { "dialog_id": "..." }
+}
+```
+
+**Addressed by dialog, answered per person.** The server resolves the dialog's membership, subtracts
+you, and subscribes this connection to whoever is left. You cannot name a user directly — that would
+let a client watch anybody.
+
+- **You get an immediate `presence.update` per peer**, before any transition. Without that snapshot a
+  peer who has been connected all day would read as unknown until they next changed state.
+- **Subscribe-on-demand is the contract, not a suggestion.** Subscribe when a conversation opens,
+  unsubscribe when it closes, and never expect presence for a conversation that is not on screen.
+  Broadcasting presence to all contacts is what turns a carrier blip into an incident: 50,000 users
+  reconnecting with 200 contacts each is 10 million frames.
+- **Subscriptions are per connection and die with the socket.** After a reconnect, re-subscribe for
+  whatever is on screen; nothing is remembered for you.
+- Re-subscribing the same dialog is safe — it replaces that dialog's subscription and re-sends the
+  snapshot.
+- **A dialog you are not in is `DIALOG_NOT_FOUND`**, correlated by `ref_id` — the same answer as a
+  dialog that does not exist, so this cannot be used to discover which dialog ids are real.
+
+#### `presence.unsubscribe` (C→S)
+
+Same payload. **Nothing is returned, ever** — not even for a dialog you never subscribed to. Sending
+it is an optimization, not a requirement; closing the socket has the same effect.
+
+#### `presence.update` (S→C)
+
+```json
+{
+  "v": 1, "type": "presence.update", "ts": 1730000000000,
+  "payload": { "user_id": "...", "status": "offline", "last_seen": "2026-08-13T10:00:00Z" }
+}
+```
+
+`status` is `online` or `offline`. Treat an unrecognised value as `offline` rather than failing.
+
+- **`last_seen` is null whenever it is not known**, which includes every `online` update (the status
+  already says they are here) and any peer the server has not watched go offline — **including after
+  a server restart**, because presence is never persisted. Render "offline" without a timestamp; do
+  not treat null as an error or as "a long time ago".
+- Sent on a user's **first** connection and **last** disconnection, not per device. A peer with a
+  phone and a laptop does not flicker as they switch.
+- Delivered only to connections that subscribed to a dialog with that person in it.
+
+#### `typing.start` (C→S, and S→C)
+
+```json
+{ "v": 1, "type": "typing.start", "id": "<any UUID>", "ts": 0, "payload": { "dialog_id": "..." } }
+
+{ "v": 1, "type": "typing.start", "ts": 1730000000000,
+  "payload": { "dialog_id": "...", "user_id": "..." } }
+```
+
+Same type both directions, like `message.read`; outbound adds `user_id` because it has to say who is
+typing.
+
+- **Throttle to at most one emission per 3 seconds while typing, never per keystroke.** The server
+  does not enforce this yet (§9), and every emission costs it a broker round trip, so this limit is
+  the only thing standing between a chatty client and real load.
+- **Expire the indicator client-side after ~5s of silence.** There is no `typing.stop` frame and there
+  is not going to be one: a stop lost on a dropped socket would leave somebody typing forever.
+- **Nothing is returned, ever** — no ack, and no error even for a dialog that is not yours. A failure
+  is not actionable and the next keystroke supersedes the frame.
+- **Typing needs no presence subscription**, and it is not delivered to your own other devices.
+- **No push notification, ever.** An offline peer is not told you are typing.
+- Delivered to participants' live connections only. There is no catch-up: a `typing.start` missed
+  while the socket was down is gone, which is correct.
 
 ### 4.3 Notifications — WIRED, BUT NEVER SENT
 
@@ -769,10 +846,13 @@ The socket **will** drop — tunnels, backgrounding, network switches. Recovery 
    back short. Merge results, deduplicating on `messageId`.
 5. Flush the outbox — resend anything still `PENDING`, and resend `message.read` for any read taken
    while offline.
+6. Re-send `presence.subscribe` for whatever conversation is on screen. Subscriptions belong to the
+   old connection and were dropped with it, and the snapshot that comes back is also how stale
+   presence gets corrected — there is no catch-up for presence and no need for one.
 
 **The server buffers nothing for offline clients.** There is no replay, no server-side outbox, no "missed messages" frame. Catch-up over REST is the only mechanism, and it is sufficient because the database is authoritative.
 
-**All five steps work now.** Step 3 is what makes a conversation somebody else started visible at
+**Every step works now.** Step 3 is what makes a conversation somebody else started visible at
 all — without it, a dialog id only ever existed on the device that opened it. Step 4 is the
 correctness mechanism the whole delivery design leans on: a frame missed while the socket was down is
 recovered here, which is why the gateway is allowed to drop it.
@@ -793,6 +873,18 @@ Raised by the gateway, on the frame it could not process:
 | `UNSUPPORTED_VERSION` | Envelope `v` is a version this server does not speak | Fail permanently; the client is too new or too old |
 | `SEND_FAILED` | The send could not be handed to the broker | Retry the same `id` over REST |
 | `CALL_SIGNAL_FAILED` | call-service was unreachable or failed with no better code | Tear down the peer connection; signal ordering is already lost |
+
+Also raised by the gateway, but **only on `presence.subscribe`** (§4.2) — it is the one frame where the
+gateway has to resolve a dialog itself, and the codes are spelled exactly as message-service spells
+them below so a client needs no new handling:
+
+| Code | Meaning | Client action |
+|---|---|---|
+| `DIALOG_NOT_FOUND` | No such dialog, or you are not in it — deliberately indistinguishable | Do not retry; stop expecting presence for it |
+| `INVALID_REQUEST` | `dialog_id` is not a valid id | Bug — log, do not retry |
+| `INTERNAL` | message-service was unreachable | Retry with backoff |
+
+`presence.unsubscribe` and `typing.start` raise none of these: they answer nothing at all.
 
 Raised by call-service and relayed as an `error` frame on the offending signal:
 
@@ -836,10 +928,13 @@ connection, not a frame. `RATE_LIMITED` and `PAYLOAD_TOO_LARGE` do not exist eit
 | History page size | 50 (max 100) | **Yes** — clamped by the REST API, never rejected |
 | Max frame size | 64 KB (intended) | **No** |
 | Rate limit | ~30 frames/sec sustained (intended) | **No** |
+| `typing.start` emissions | 1 per 3s per conversation | **No** — client-enforced |
 | Server idle timeout | 90s (intended) | **No** |
 
-**The bottom three are not implemented.** No rate limiter, frame-size check, or idle timeout
-exists in the gateway today, which is why §8 has no `RATE_LIMITED` or `PAYLOAD_TOO_LARGE` code.
+**The bottom four are not implemented.** No rate limiter, frame-size check, typing throttle, or idle
+timeout exists in the gateway today, which is why §8 has no `RATE_LIMITED` or `PAYLOAD_TOO_LARGE` code.
+The typing limit is the one a client can break most cheaply — a frame per keystroke is a valid frame —
+and the only thing holding it is the client contract in §4.2.
 Clients should still respect the intended values — they are what the server will enforce when the
 limiter lands, and a client already living within them needs no change on that day.
 

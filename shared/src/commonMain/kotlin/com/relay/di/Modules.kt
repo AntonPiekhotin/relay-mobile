@@ -23,6 +23,7 @@ import com.relay.network.NotificationApi
 import com.relay.network.SocketClient
 import com.relay.network.SocketLifecycle
 import com.relay.network.UserApi
+import com.relay.presence.PresenceEngine
 import com.relay.push.AppPresence
 import com.relay.push.DeviceTokenRegistrar
 import com.relay.push.PushCoordinator
@@ -35,6 +36,8 @@ import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.repository.PeerNameResolver
+import com.relay.repository.PresenceRepository
+import com.relay.repository.PresenceRepositoryImpl
 import com.relay.repository.SocketConnectionStatus
 import com.relay.repository.UserRepository
 import com.relay.repository.UserRepositoryImpl
@@ -80,6 +83,8 @@ val commonModule = module {
     }
     single { CallEngine(get(), get(), get<RtcClientFactory>(), get()) }
     single<CallRepository> { CallRepositoryImpl(get(), get()) }
+    single { PresenceEngine(get(), get()) }
+    single<PresenceRepository> { PresenceRepositoryImpl(get()) }
     single { AppPresence() }
     single { PushPermissionRequests() }
     single { PushNavigator() }
@@ -91,10 +96,10 @@ val commonModule = module {
     single<UserRepository> { UserRepositoryImpl(get(), get()) }
     single { PeerNameResolver(get(), get(), get(), get()) }
     single<ConnectionStatus> { SocketConnectionStatus(get()) }
-    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
     factory { (dialogId: String) ->
-        ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get())
+        ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get(), get())
     }
     factory { CallViewModel(get(), get()) }
     factory { CallsViewModel(get(), get(), get(), get()) }

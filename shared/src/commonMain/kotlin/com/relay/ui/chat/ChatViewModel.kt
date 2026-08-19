@@ -9,6 +9,7 @@ import com.relay.call.PlaceCallResult
 import com.relay.model.Dialog
 import com.relay.model.DialogSyncState
 import com.relay.model.Message
+import com.relay.presence.PeerPresence
 import com.relay.protocol.nowEpochMillis
 import com.relay.push.AppPresence
 import com.relay.push.PushPermissionRequests
@@ -17,7 +18,9 @@ import com.relay.repository.CallRepository
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.HISTORY_PAGE_SIZE
 import com.relay.repository.MessageRepository
+import com.relay.repository.PresenceRepository
 import com.relay.ui.state.ChatState
+import com.relay.ui.state.chatSubtitleOf
 import com.relay.ui.state.dialogTitleOf
 import com.relay.ui.state.toConnectionUi
 import com.relay.ui.state.toMessageUi
@@ -45,6 +48,7 @@ class ChatViewModel(
     private val presence: AppPresence,
     private val permissionRequests: PushPermissionRequests,
     private val calls: CallRepository,
+    private val peerPresence: PresenceRepository,
     private val mic: MicPermission,
     private val now: () -> Long = ::nowEpochMillis
 ) : ViewModel() {
@@ -69,11 +73,17 @@ class ChatViewModel(
         session.state
     ) { currentDraft, loading, error, auth -> Transient(currentDraft, loading, error, auth) }
 
+    private val livePresence = combine(
+        peerPresence.presence,
+        peerPresence.typing
+    ) { presenceByUser, typingByDialog -> LivePresence(presenceByUser, typingByDialog) }
+
     init {
         presence.onDialogOpened(dialogId)
+        peerPresence.dialogOpened(dialogId)
         viewModelScope.launch {
-            combine(stored, connection.phase, transient) { chat, phase, extras ->
-                buildState(chat, phase, extras)
+            combine(stored, connection.phase, transient, livePresence) { chat, phase, extras, live ->
+                buildState(chat, phase, extras, live)
             }.collect { built -> mutableState.value = built }
         }
         viewModelScope.launch {
@@ -85,6 +95,7 @@ class ChatViewModel(
     }
 
     fun onDraftChange(value: String) {
+        if (value.isNotBlank() && value != draft.value) peerPresence.typingActivity(dialogId)
         draft.value = value
         sendError.value = null
     }
@@ -121,6 +132,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         presence.onDialogClosed(dialogId)
+        peerPresence.dialogClosed(dialogId)
         super.onCleared()
     }
 
@@ -146,13 +158,18 @@ class ChatViewModel(
     private fun buildState(
         chat: StoredChat,
         phase: ConnectionPhase,
-        extras: Transient
+        extras: Transient,
+        live: LivePresence
     ): ChatState {
         val selfId = (extras.auth as? AuthState.LoggedIn)?.userId
+        val peerId = chat.dialog?.peerId
+        val peerTyping = peerId != null && peerId in live.typingByDialog[dialogId].orEmpty()
         return ChatState(
             dialogId = dialogId,
             title = dialogTitleOf(chat.dialog?.title),
-            peerId = chat.dialog?.peerId,
+            subtitle = chatSubtitleOf(peerId?.let { live.presenceByUser[it] }, peerTyping, now()),
+            isPeerTyping = peerTyping,
+            peerId = peerId,
             messages = chat.rows.toMessageUi(selfId, now(), chat.dialog?.peerReadAt),
             isLoadingOlder = extras.loading,
             hasMoreHistory = chat.syncState?.hasMoreHistory ?: false,
@@ -174,4 +191,9 @@ private data class Transient(
     val loading: Boolean,
     val error: String?,
     val auth: AuthState
+)
+
+private data class LivePresence(
+    val presenceByUser: Map<String, PeerPresence>,
+    val typingByDialog: Map<String, Set<String>>
 )

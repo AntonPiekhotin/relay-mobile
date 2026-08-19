@@ -98,10 +98,60 @@ class InboundFrameParsingTest {
     @Test
     fun unknownFrameTypeIsIgnoredNotError() {
         val frame = parseInboundFrame(
-            """{"v":1,"type":"presence.update","ts":1,"payload":{"user_id":"u-1","status":"online"}}"""
+            """{"v":1,"type":"reaction.new","ts":1,"payload":{"message_id":"m-1","emoji":"+1"}}"""
         )
         val unknown = assertIs<InboundFrame.Unknown>(frame)
-        assertEquals("presence.update", unknown.type)
+        assertEquals("reaction.new", unknown.type)
+    }
+
+    @Test
+    fun parsesPresenceUpdateOnline() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"presence.update","ts":1,"payload":{"user_id":"u-1","status":"online"}}"""
+        )
+        val update = assertIs<InboundFrame.PresenceUpdate>(frame)
+        assertEquals("u-1", update.payload.userId)
+        assertEquals("online", update.payload.status)
+        assertNull(update.payload.lastSeen)
+    }
+
+    @Test
+    fun parsesPresenceUpdateOfflineWithLastSeen() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"presence.update","ts":1,
+               "payload":{"user_id":"u-1","status":"offline","last_seen":"2026-08-13T10:00:00Z"}}"""
+        )
+        val update = assertIs<InboundFrame.PresenceUpdate>(frame)
+        assertEquals("offline", update.payload.status)
+        assertEquals("2026-08-13T10:00:00Z", update.payload.lastSeen)
+    }
+
+    @Test
+    fun parsesPresenceUpdateWithNullLastSeen() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"presence.update","ts":1,
+               "payload":{"user_id":"u-1","status":"offline","last_seen":null}}"""
+        )
+        val update = assertIs<InboundFrame.PresenceUpdate>(frame)
+        assertNull(update.payload.lastSeen)
+    }
+
+    @Test
+    fun parsesTypingStart() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"typing.start","ts":1,"payload":{"dialog_id":"d-1","user_id":"u-2"}}"""
+        )
+        val typing = assertIs<InboundFrame.TypingStart>(frame)
+        assertEquals("d-1", typing.payload.dialogId)
+        assertEquals("u-2", typing.payload.userId)
+    }
+
+    @Test
+    fun typingStartWithoutUserIdIsMalformed() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"typing.start","ts":1,"payload":{"dialog_id":"d-1"}}"""
+        )
+        assertIs<InboundFrame.Malformed>(frame)
     }
 
     @Test

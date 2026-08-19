@@ -50,6 +50,47 @@ class OutboundFrameEncodingTest {
     }
 
     @Test
+    fun presenceSubscribeCarriesTheDialogId() {
+        val encoded = encodeFrame(presenceSubscribeFrame("dialog-1", "frame-1"))
+        val json = Json.parseToJsonElement(encoded).jsonObject
+        assertEquals("presence.subscribe", json["type"]?.jsonPrimitive?.content)
+        assertEquals("frame-1", json["id"]?.jsonPrimitive?.content)
+        assertEquals(
+            "dialog-1",
+            json["payload"]?.jsonObject?.get("dialog_id")?.jsonPrimitive?.content
+        )
+    }
+
+    @Test
+    fun presenceUnsubscribeCarriesTheDialogId() {
+        val encoded = encodeFrame(presenceUnsubscribeFrame("dialog-1", "frame-2"))
+        val json = Json.parseToJsonElement(encoded).jsonObject
+        assertEquals("presence.unsubscribe", json["type"]?.jsonPrimitive?.content)
+        assertEquals(
+            "dialog-1",
+            json["payload"]?.jsonObject?.get("dialog_id")?.jsonPrimitive?.content
+        )
+    }
+
+    @Test
+    fun typingStartCarriesTheDialogIdAndNoUserId() {
+        val encoded = encodeFrame(typingStartFrame("dialog-1", "frame-3"))
+        val json = Json.parseToJsonElement(encoded).jsonObject
+        assertEquals("typing.start", json["type"]?.jsonPrimitive?.content)
+        assertEquals("frame-3", json["id"]?.jsonPrimitive?.content)
+        val payload = json["payload"]?.jsonObject
+        assertEquals("dialog-1", payload?.get("dialog_id")?.jsonPrimitive?.content)
+        assertEquals(null, payload?.get("user_id"))
+    }
+
+    @Test
+    fun presencePayloadKeysAreSnakeCase() {
+        val encoded = encodeFrame(presenceSubscribeFrame("d"))
+        assertTrue("dialog_id" in encoded)
+        assertTrue("dialogId" !in encoded)
+    }
+
+    @Test
     fun generatedFrameIdsAreUnique() {
         assertNotEquals(newFrameId(), newFrameId())
     }

@@ -49,6 +49,8 @@ sealed interface ConnectionUi {
 data class ChatState(
     val dialogId: String = "",
     val title: String = "",
+    val subtitle: String? = null,
+    val isPeerTyping: Boolean = false,
     val peerId: String? = null,
     val messages: List<MessageUi> = emptyList(),
     val isLoadingOlder: Boolean = false,

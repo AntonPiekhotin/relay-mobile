@@ -31,6 +31,7 @@ import com.relay.ui.state.ChatState
 
 const val CHAT_ERROR_TAG = "chat-error"
 const val CHAT_CALL_TAG = "chat-call"
+const val CHAT_SUBTITLE_TAG = "chat-subtitle"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +51,23 @@ fun ChatScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(state.title) },
+                title = {
+                    Column {
+                        Text(state.title)
+                        if (state.subtitle != null) {
+                            Text(
+                                text = state.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (state.isPeerTyping) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.testTag(CHAT_SUBTITLE_TAG)
+                            )
+                        }
+                    }
+                },
                 navigationIcon = { BackButton(onBack = onBack) },
                 actions = {
                     if (state.peerId != null) {
