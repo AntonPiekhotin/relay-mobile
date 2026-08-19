@@ -16,21 +16,26 @@ import com.relay.ui.components.CONNECTION_STRIP_TAG
 import com.relay.ui.components.ConnectionStrip
 import com.relay.ui.components.SWIPE_BACK_TAG
 import com.relay.ui.components.SwipeBackBox
+import com.relay.ui.calls.CALLS_RETRY_TAG
+import com.relay.ui.calls.CallsScreen
 import com.relay.ui.chat.CHAT_ERROR_TAG
 import com.relay.ui.chat.ChatScreen
-import com.relay.ui.dialogs.DIALOGS_PROFILE_TAG
-import com.relay.ui.dialogs.DIALOGS_SEARCH_TAG
 import com.relay.ui.dialogs.DialogListScreen
-import com.relay.ui.people.PeopleScreen
+import com.relay.ui.home.HomeBottomBar
+import com.relay.ui.home.HomeTab
+import com.relay.ui.home.homeTabTag
+import com.relay.ui.people.ContactsScreen
+import com.relay.ui.people.SearchScreen
 import com.relay.ui.profile.PROFILE_LOGOUT_TAG
 import com.relay.ui.profile.ProfileScreen
 import com.relay.ui.state.MessageStatusUi
+import com.relay.ui.state.CallLogUi
+import com.relay.ui.state.CallsState
 import com.relay.ui.state.ChatState
 import com.relay.ui.state.ConnectionUi
 import com.relay.ui.state.DialogListState
 import com.relay.ui.state.DialogUi
 import com.relay.ui.state.PeopleState
-import com.relay.ui.state.PeopleTab
 import com.relay.ui.state.PersonUi
 import com.relay.ui.state.ProfileState
 import com.relay.ui.state.ProfileUi
@@ -60,6 +65,16 @@ private fun personUi(id: String, name: String, isContact: Boolean) = PersonUi(
     isContact = isContact
 )
 
+private fun callLogUi(id: String, peerName: String, missed: Boolean = false) = CallLogUi(
+    id = id,
+    peerId = "peer-$id",
+    dialogId = "dialog-$id",
+    peerName = peerName,
+    isMissed = missed,
+    subtitle = if (missed) "Missed" else "Outgoing · 03:24",
+    timestamp = "12:00"
+)
+
 @OptIn(ExperimentalTestApi::class)
 class ScreenUiTest {
 
@@ -84,9 +99,7 @@ class ScreenUiTest {
             RelayTheme {
                 DialogListScreen(
                     state = DialogListState(isLoaded = true),
-                    onOpenDialog = {},
-                    onOpenSearch = {},
-                    onOpenProfile = {}
+                    onOpenDialog = {}
                 )
             }
         }
@@ -99,9 +112,7 @@ class ScreenUiTest {
             RelayTheme {
                 DialogListScreen(
                     state = DialogListState(isLoaded = false),
-                    onOpenDialog = {},
-                    onOpenSearch = {},
-                    onOpenProfile = {}
+                    onOpenDialog = {}
                 )
             }
         }
@@ -118,9 +129,7 @@ class ScreenUiTest {
                         dialogs = listOf(dialogUi("d1", "Ada", "see you then")),
                         isLoaded = true
                     ),
-                    onOpenDialog = { opened += it },
-                    onOpenSearch = {},
-                    onOpenProfile = {}
+                    onOpenDialog = { opened += it }
                 )
             }
         }
@@ -134,14 +143,12 @@ class ScreenUiTest {
     fun theSearchTabAsksForAMinimumQueryBeforeSearching() = runComposeUiTest {
         setContent {
             RelayTheme {
-                PeopleScreen(
-                    state = PeopleState(tab = PeopleTab.SEARCH, query = "a"),
-                    onTabChange = {},
+                SearchScreen(
+                    state = PeopleState(query = "a"),
                     onQueryChange = {},
                     onOpenChat = {},
                     onAddContact = {},
-                    onRemoveContact = {},
-                    onBack = {}
+                    onRemoveContact = {}
                 )
             }
         }
@@ -154,20 +161,16 @@ class ScreenUiTest {
         val removed = mutableListOf<String>()
         setContent {
             RelayTheme {
-                PeopleScreen(
+                ContactsScreen(
                     state = PeopleState(
-                        tab = PeopleTab.CONTACTS,
                         contacts = listOf(
                             personUi("a", "Ada Lovelace", isContact = true),
                             personUi("b", "Grace Hopper", isContact = false)
                         )
                     ),
-                    onTabChange = {},
-                    onQueryChange = {},
                     onOpenChat = {},
                     onAddContact = { added += it },
-                    onRemoveContact = { removed += it },
-                    onBack = {}
+                    onRemoveContact = { removed += it }
                 )
             }
         }
@@ -183,19 +186,16 @@ class ScreenUiTest {
         val opened = mutableListOf<String>()
         setContent {
             RelayTheme {
-                PeopleScreen(
+                SearchScreen(
                     state = PeopleState(
-                        tab = PeopleTab.SEARCH,
                         query = "ada",
                         hasSearched = true,
                         results = listOf(personUi("a", "Ada Lovelace", isContact = false))
                     ),
-                    onTabChange = {},
                     onQueryChange = {},
                     onOpenChat = { opened += it },
                     onAddContact = {},
-                    onRemoveContact = {},
-                    onBack = {}
+                    onRemoveContact = {}
                 )
             }
         }
@@ -253,25 +253,34 @@ class ScreenUiTest {
     }
 
     @Test
-    fun theDialogListOffersSearchAndProfileInsteadOfALogoutButton() = runComposeUiTest {
-        val searched = mutableListOf<Unit>()
-        val profiled = mutableListOf<Unit>()
+    fun theBottomDockListsEveryPageAndReportsTaps() = runComposeUiTest {
+        val selected = mutableListOf<HomeTab>()
         setContent {
             RelayTheme {
-                DialogListScreen(
-                    state = DialogListState(isLoaded = true),
-                    onOpenDialog = {},
-                    onOpenSearch = { searched += Unit },
-                    onOpenProfile = { profiled += Unit }
+                HomeBottomBar(
+                    selected = HomeTab.CHATS,
+                    chatsBadge = 0,
+                    onSelect = { selected += it }
                 )
             }
         }
-        onNodeWithText("Log out").assertDoesNotExist()
-        onNodeWithTag(DIALOGS_SEARCH_TAG).assertIsDisplayed().performClick()
-        onNodeWithTag(DIALOGS_PROFILE_TAG).assertIsDisplayed().performClick()
+        HomeTab.entries.forEach { tab ->
+            onNodeWithTag(homeTabTag(tab)).assertIsDisplayed()
+        }
+        onNodeWithTag(homeTabTag(HomeTab.CONTACTS)).performClick()
+        onNodeWithTag(homeTabTag(HomeTab.SETTINGS)).performClick()
         waitForIdle()
-        assertEquals(1, searched.size)
-        assertEquals(1, profiled.size)
+        assertEquals(listOf(HomeTab.CONTACTS, HomeTab.SETTINGS), selected)
+    }
+
+    @Test
+    fun unreadMessagesBadgeTheChatsTab() = runComposeUiTest {
+        setContent {
+            RelayTheme {
+                HomeBottomBar(selected = HomeTab.CHATS, chatsBadge = 7, onSelect = {})
+            }
+        }
+        onNodeWithText("7", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -287,7 +296,6 @@ class ScreenUiTest {
                             memberSince = "26 Jul 2026"
                         )
                     ),
-                    onBack = {},
                     onRetry = {},
                     onLogout = { loggedOut += Unit }
                 )
@@ -308,7 +316,6 @@ class ScreenUiTest {
             RelayTheme {
                 ProfileScreen(
                     state = ProfileState(error = "Cannot reach the server"),
-                    onBack = {},
                     onRetry = { retried += Unit },
                     onLogout = {}
                 )
@@ -326,11 +333,15 @@ class ScreenUiTest {
         val back = mutableListOf<Unit>()
         setContent {
             RelayTheme {
-                ProfileScreen(
-                    state = ProfileState(error = "offline"),
-                    onBack = { back += Unit },
+                ChatScreen(
+                    state = ChatState(dialogId = "d1", title = "Ada"),
+                    onDraftChange = {},
+                    onSend = {},
                     onRetry = {},
-                    onLogout = {}
+                    onLoadOlder = {},
+                    onBack = { back += Unit },
+                    onDismissError = {},
+                    onCall = {}
                 )
             }
         }
@@ -372,18 +383,77 @@ class ScreenUiTest {
     fun anEmptyContactListPointsAtSearch() = runComposeUiTest {
         setContent {
             RelayTheme {
-                PeopleScreen(
-                    state = PeopleState(tab = PeopleTab.CONTACTS),
-                    onTabChange = {},
-                    onQueryChange = {},
+                ContactsScreen(
+                    state = PeopleState(),
                     onOpenChat = {},
                     onAddContact = {},
-                    onRemoveContact = {},
-                    onBack = {}
+                    onRemoveContact = {}
                 )
             }
         }
         onNodeWithText("No contacts yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun aMissedCallIsMarkedAndTappingARowOpensItsChat() = runComposeUiTest {
+        val opened = mutableListOf<String>()
+        val calledBack = mutableListOf<String>()
+        setContent {
+            RelayTheme {
+                CallsScreen(
+                    state = CallsState(
+                        calls = listOf(
+                            callLogUi("c1", "Ada Lovelace", missed = true),
+                            callLogUi("c2", "Grace Hopper")
+                        ),
+                        isLoaded = true
+                    ),
+                    onOpenDialog = { opened += it },
+                    onCallBack = { calledBack += it.id },
+                    onRetry = {}
+                )
+            }
+        }
+        onNodeWithText("Missed").assertIsDisplayed()
+        onNodeWithText("Ada Lovelace").assertIsDisplayed().performClick()
+        onNodeWithContentDescription("Call Grace Hopper").assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(listOf("dialog-c1"), opened)
+        assertEquals(listOf("c2"), calledBack)
+    }
+
+    @Test
+    fun anUnreachableCallHistoryOffersARetry() = runComposeUiTest {
+        val retried = mutableListOf<Unit>()
+        setContent {
+            RelayTheme {
+                CallsScreen(
+                    state = CallsState(isLoaded = true, error = "Cannot reach the server"),
+                    onOpenDialog = {},
+                    onCallBack = {},
+                    onRetry = { retried += Unit }
+                )
+            }
+        }
+        onNodeWithText("Cannot reach the server").assertIsDisplayed()
+        onNodeWithTag(CALLS_RETRY_TAG).assertIsDisplayed().performClick()
+        waitForIdle()
+        assertEquals(1, retried.size)
+    }
+
+    @Test
+    fun anEmptyCallHistoryExplainsItself() = runComposeUiTest {
+        setContent {
+            RelayTheme {
+                CallsScreen(
+                    state = CallsState(isLoaded = true),
+                    onOpenDialog = {},
+                    onCallBack = {},
+                    onRetry = {}
+                )
+            }
+        }
+        onNodeWithText("No calls yet").assertIsDisplayed()
     }
 
     @Test

@@ -28,8 +28,8 @@ sends a frame. Both platforms plug in one interface and hold no call logic of th
 **There is no call table.** Unlike messages, a call has no offline meaning: it exists while both
 parties are connected and is settled by the server the moment either leaves. Live state is in
 memory; a missed call arrives as a `MISSED_CALL` push. The call log endpoint
-(`GET /api/v1/call/calls`) is wired in `CallApi` but nothing reads it yet — that is the call-history
-screen, not this phase.
+(`GET /api/v1/call/calls`) is read by the Calls tab (`CallsViewModel`) — history straight from REST
+into screen state, no local table, refreshed on entry and by the retry affordance.
 
 ---
 

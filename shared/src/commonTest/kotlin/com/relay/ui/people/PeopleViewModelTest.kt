@@ -8,7 +8,6 @@ import com.relay.testutil.FakeMessageRepository
 import com.relay.testutil.FakeUserRepository
 import com.relay.testutil.contact
 import com.relay.testutil.searchResult
-import com.relay.ui.state.PeopleTab
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -254,18 +253,4 @@ class PeopleViewModelTest {
         assertEquals(listOf("peer-1"), messages.openedPeers)
     }
 
-    @Test
-    fun switchingTabsClearsTheVisibleError() = runTest {
-        val users = FakeUserRepository()
-        val messages = FakeMessageRepository()
-        users.refreshHandler = { UserResult.Failure("Cannot reach the server") }
-        val viewModel = PeopleViewModel(users, messages, TEST_DEBOUNCE)
-        advanceUntilIdle()
-        assertEquals("Cannot reach the server", viewModel.state.value.error)
-
-        viewModel.selectTab(PeopleTab.CONTACTS)
-
-        assertEquals(PeopleTab.CONTACTS, viewModel.state.value.tab)
-        assertEquals(null, viewModel.state.value.error)
-    }
 }

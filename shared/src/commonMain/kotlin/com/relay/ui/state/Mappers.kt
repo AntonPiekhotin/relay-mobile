@@ -7,14 +7,22 @@ import com.relay.model.MessageState
 import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
 import com.relay.model.UserSummary
+import com.relay.network.CallHistoryEntryResponse
 import com.relay.repository.ConnectionPhase
 import com.relay.ui.format.dayKeyOf
 import com.relay.ui.format.formatClockTime
 import com.relay.ui.format.formatDaySeparator
+import com.relay.ui.format.formatDuration
 import com.relay.ui.format.formatFullDate
 import com.relay.ui.format.formatListTimestamp
+import kotlin.time.ExperimentalTime
+import kotlin.time.Instant
 
 const val UNRESOLVED_PEER_TITLE = "Unknown user"
+
+private const val MISSED_STATUS = "MISSED"
+private const val OUTGOING_DIRECTION = "OUTGOING"
+private const val MILLIS_PER_SECOND = 1000L
 
 fun dialogTitleOf(title: String?): String =
     title?.takeIf { it.isNotBlank() } ?: UNRESOLVED_PEER_TITLE
@@ -82,3 +90,32 @@ fun List<Contact>.toPersonUi(): List<PersonUi> = map { it.user.toPersonUi(isCont
 
 fun List<UserSearchResult>.searchResultsToPersonUi(contactIds: Set<String>): List<PersonUi> =
     map { it.user.toPersonUi(isContact = it.user.id in contactIds) }
+
+fun CallHistoryEntryResponse.toCallLogUi(peerNames: Map<String, String>, nowMillis: Long): CallLogUi {
+    val missed = status.equals(MISSED_STATUS, ignoreCase = true)
+    val directionWord = when {
+        missed -> "Missed"
+        direction.equals(OUTGOING_DIRECTION, ignoreCase = true) -> "Outgoing"
+        else -> "Incoming"
+    }
+    val durationLabel = durationSeconds
+        ?.takeIf { it > 0 && !missed }
+        ?.let { formatDuration(it * MILLIS_PER_SECOND) }
+    return CallLogUi(
+        id = id,
+        peerId = peerId,
+        dialogId = dialogId,
+        peerName = peerId?.let(peerNames::get) ?: UNRESOLVED_PEER_TITLE,
+        isMissed = missed,
+        subtitle = listOfNotNull(directionWord, durationLabel).joinToString(" · "),
+        timestamp = parseEpochMillis(startedAt)?.let { formatListTimestamp(it, nowMillis) } ?: ""
+    )
+}
+
+@OptIn(ExperimentalTime::class)
+private fun parseEpochMillis(iso: String): Long? =
+    try {
+        Instant.parse(iso).toEpochMilliseconds()
+    } catch (e: IllegalArgumentException) {
+        null
+    }

@@ -43,6 +43,7 @@ import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.ui.SessionViewModel
 import com.relay.ui.call.CallViewModel
+import com.relay.ui.calls.CallsViewModel
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.dialogs.DialogListViewModel
 import com.relay.ui.people.PeopleViewModel
@@ -96,6 +97,7 @@ val commonModule = module {
         ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get())
     }
     factory { CallViewModel(get(), get()) }
+    factory { CallsViewModel(get(), get(), get(), get()) }
     factory { PeopleViewModel(get(), get()) }
     factory { ProfileViewModel(get()) }
 }

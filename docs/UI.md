@@ -133,24 +133,32 @@ Use a Compose Multiplatform–compatible navigation library (Navigation Compose 
 
 ```kotlin
 sealed interface Route {
-    data object DialogList : Route
+    data object Home : Route
     data class Chat(val dialogId: String) : Route
-    data object People : Route
-    data object Profile : Route
 }
 ```
+
+**`Home` is the only top-level route.** It is a Telegram-style shell: a bottom dock
+(`HomeBottomBar`, five `NavigationBarItem`s) switching between the Contacts, Calls, Chats, Search,
+and Settings pages. The dock is plain state inside `HomeScreen` (`rememberSaveable` + a
+`SaveableStateHolder` so each page keeps its scroll and field state) — tabs are **not** nav routes,
+so system back never walks through them and a pushed `Chat` hides the dock. Chats is the start tab
+and carries the total-unread badge. Each page owns its own `Scaffold`/`TopAppBar`; the shell applies
+`consumeWindowInsets` so the dock's insets are not double-counted.
 
 **The call screen is not a route.** `CallHost` renders above the whole `NavHost` whenever a call
 session exists, so ringing does not disturb the back stack and the user returns to exactly where
 they were when the call ends. On Android a `CallActivity` hosts the same composable for the
 lock-screen case. See `docs/CALLS.md`.
 
-The dialog list is the only top-level screen. Its app bar carries two icon actions — a search glyph
-opening `People` (which lands on the search tab; that screen is a finder first and a contact list
-second) and an account glyph opening `Profile`. **Log out lives on the profile screen, nowhere else.**
-Profile is read-only for now: name, email, member-since, and the logout button. Editing is not built.
+The dock pages: **Contacts** and **Search** share one `PeopleViewModel` (adding a contact from
+search updates both). **Calls** reads `GET /api/v1/call/calls` through `CallsViewModel` — the one
+sanctioned REST-into-state screen, because calls deliberately have no local table (see
+`docs/CALLS.md` §1); rows open the dialog's chat, the trailing phone glyph calls back. **Settings**
+is the read-only profile: name, email, member-since, and the logout button. **Log out lives there,
+nowhere else.**
 
-**Going back.** Every screen below the dialog list gets a `BackButton` (arrow glyph) *and* is wrapped
+**Going back.** Every screen pushed above `Home` gets a `BackButton` (arrow glyph) *and* is wrapped
 in `SwipeBackBox` in the nav host, which drags the screen with a swipe that starts within 24 dp of
 the left edge and pops once it passes 30% of the width. It is plain Compose pointer input, so it
 behaves the same on both platforms and does not replace the platform gestures: Android's system back
@@ -224,8 +232,10 @@ Build these as standalone, previewable composables:
 | `Composer` | Pill text field and a filled icon send button, in the chat's `bottomBar` |
 | `DialogRow` | Avatar, title, last message, unread badge, timestamp |
 | `DialogList` | `LazyColumn` of `DialogRow` |
+| `HomeBottomBar` | The dock: five `NavigationBarItem`s with glyph icons; unread badge on Chats |
+| `CallLogRow` | Avatar, peer (error-coloured when missed), direction · duration, timestamp, call-back glyph |
 | `Avatar` | Initials in a circle; `size` and `textStyle` are parameters |
-| `SearchGlyph` / `AccountGlyph` / `BackGlyph` | App-bar icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
+| `SearchGlyph` / `AccountGlyph` / `BackGlyph` / `ChatGlyph` / `SettingsGlyph` | App-bar and dock icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
 | `PhoneGlyph` / `MicrophoneGlyph` / `SpeakerGlyph` | Call controls, same `Canvas` approach; `PhoneGlyph` rotates 135° for decline and hang-up |
 | `CallScreen` | Full-screen call overlay: peer, status or talk timer, and the actions for the current stage |
 | `BackButton` | `IconButton` + `BackGlyph`, used as every sub-screen's `navigationIcon` |

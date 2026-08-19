@@ -77,10 +77,7 @@ data class DialogListState(
     val connection: ConnectionUi = ConnectionUi.Unknown
 )
 
-enum class PeopleTab { CONTACTS, SEARCH }
-
 data class PeopleState(
-    val tab: PeopleTab = PeopleTab.SEARCH,
     val query: String = "",
     val contacts: List<PersonUi> = emptyList(),
     val results: List<PersonUi> = emptyList(),
@@ -89,4 +86,21 @@ data class PeopleState(
     val hasSearched: Boolean = false,
     val error: String? = null,
     val pendingIds: Set<String> = emptySet()
+)
+
+data class CallLogUi(
+    val id: String,
+    val peerId: String?,
+    val dialogId: String?,
+    val peerName: String,
+    val isMissed: Boolean,
+    val subtitle: String,
+    val timestamp: String
+)
+
+data class CallsState(
+    val calls: List<CallLogUi> = emptyList(),
+    val isLoading: Boolean = false,
+    val isLoaded: Boolean = false,
+    val error: String? = null
 )

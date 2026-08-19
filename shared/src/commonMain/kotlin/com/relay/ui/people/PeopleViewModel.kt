@@ -10,7 +10,6 @@ import com.relay.repository.OpenDialogResult
 import com.relay.repository.UserRepository
 import com.relay.repository.UserResult
 import com.relay.ui.state.PeopleState
-import com.relay.ui.state.PeopleTab
 import com.relay.ui.state.searchResultsToPersonUi
 import com.relay.ui.state.toPersonUi
 import kotlin.time.Duration
@@ -59,10 +58,6 @@ class PeopleViewModel(
             }
         }
         refreshContacts()
-    }
-
-    fun selectTab(tab: PeopleTab) {
-        mutableState.update { it.copy(tab = tab, error = null) }
     }
 
     fun refreshContacts() {

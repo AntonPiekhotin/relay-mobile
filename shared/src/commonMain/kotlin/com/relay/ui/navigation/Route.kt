@@ -5,14 +5,8 @@ import kotlinx.serialization.Serializable
 sealed interface Route {
 
     @Serializable
-    data object DialogList : Route
+    data object Home : Route
 
     @Serializable
     data class Chat(val dialogId: String) : Route
-
-    @Serializable
-    data object People : Route
-
-    @Serializable
-    data object Profile : Route
 }

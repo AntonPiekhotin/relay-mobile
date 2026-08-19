@@ -22,7 +22,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.relay.ui.components.Avatar
-import com.relay.ui.components.BackButton
 import com.relay.ui.components.LARGE_AVATAR_SIZE
 import com.relay.ui.state.ProfileState
 import com.relay.ui.state.ProfileUi
@@ -33,19 +32,13 @@ const val PROFILE_LOGOUT_TAG = "profile-logout"
 @Composable
 fun ProfileScreen(
     state: ProfileState,
-    onBack: () -> Unit,
     onRetry: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text("Profile") },
-                navigationIcon = { BackButton(onBack = onBack) }
-            )
-        }
+        topBar = { TopAppBar(title = { Text("Settings") }) }
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
