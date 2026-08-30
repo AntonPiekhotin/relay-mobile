@@ -4,15 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay needs the microphone so you can talk during calls.</string>
-	<key>RelayServerHost</key>
-	<string>172.20.10.4</string>
+	<key>RelayApiBaseUrl</key>
+	<string>https://relay.myddns.me</string>
+	<key>RelayWsUrl</key>
+	<string>wss://relay.myddns.me/ws</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
