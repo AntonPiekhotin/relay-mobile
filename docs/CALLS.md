@@ -122,7 +122,11 @@ cannot kill a call.
 |---|---|---|
 | `WebRtcAudioClient` | shared `androidMain/call/` | `io.getstream:stream-webrtc-android`, audio track, audio routing |
 | `CallActivity` | androidApp | the call screen over the lock screen, `setShowWhenLocked` |
-| `CallNotifier` | androidApp | full-screen-intent ring, missed-call and ongoing-call notifications |
+| `CallNotifier` | androidApp | `CallStyle` full-screen-intent ring, missed-call and ongoing-call notifications |
+| `IncomingCallRinger` | androidApp | loops the ringtone and vibration itself; the call channel is silent |
+| `OutgoingRingbackTone` | androidApp | `TONE_SUP_RINGTONE` ringback while an outgoing call waits |
+| `CallActionReceiver` | androidApp | Decline from the notification |
+| `FullScreenIntentAccess` | androidApp | reports and requests Android 14+ full-screen-intent access |
 | `CallForegroundService` | androidApp | `microphone` FGS so a backgrounded call keeps its mic |
 | `MicPermissionBinder` | androidApp | `RECORD_AUDIO` prompt, wired to shared `MicPermission` |
 
@@ -134,7 +138,28 @@ while `AppPresence` says the app is not foregrounded.
 
 `USE_FULL_SCREEN_INTENT` is granted by default only to calling and alarm apps on Android 14+. When
 it is not held the notification degrades to a heads-up — the call still works, it just does not take
-over the screen.
+over the screen. `MainActivity` asks for it once per install via
+`ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`; `CallNotifier` logs a warning whenever it posts without
+it, so a missing grant reads as a permission problem instead of a broken ring.
+
+**Ringing is the client's own audio, not a notification sound.** A channel sound plays once and
+cannot loop, which is why the `calls_v2` channel is silent and `IncomingCallRinger` loops the
+ringtone and vibration for as long as a session sits at `INCOMING`. The ringer is driven from
+`CallRepository.session` / `GroupCallRepository.session` alone — the push path already rings the
+engine before `PushCoordinator` returns a display, so session state, not the push, is the single
+trigger. It therefore rings in the foreground too, alongside the in-app overlay.
+
+**The caller hears a ringback for the same reason.** `OutgoingRingbackTone` runs
+`ToneGenerator.TONE_SUP_RINGTONE` on `STREAM_VOICE_CALL` while a direct session is `DIALING` or
+`RINGING`, and stops at every other stage. That tone repeats forever on its own, so there is no timer
+to manage, and the voice-call stream puts it wherever the call audio already is — earpiece by
+default, following `setSpeakerphoneOn`. It takes no audio focus: `WebRtcAudioClient` claims
+`MODE_IN_COMMUNICATION` but no focus, so grabbing focus for the tone alone would hand it back the
+moment the call connected, which is worse than not taking it.
+
+Group calls have no ringback. The initiator joins the SFU immediately and the session is `ACTIVE`
+with the roster showing who has not answered — there is live media to talk over, not silence to
+fill.
 
 **The foreground service starts at `CONNECTING`, never while ringing.** A `microphone` service
 started before `RECORD_AUDIO` is granted throws `SecurityException` on Android 14, and starting any

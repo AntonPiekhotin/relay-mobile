@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,7 +13,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.relay.call.FullScreenIntentAccess
 import com.relay.call.MicPermission
 import com.relay.call.MicPermissionBinder
 import com.relay.push.AppPresence
@@ -24,6 +27,10 @@ import com.relay.push.PushNavigator
 import com.relay.push.PushPermissionRequests
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+
+private const val CALL_PREFS = "relay.call.prefs"
+private const val KEY_FULL_SCREEN_ASKED = "fullScreenIntentAsked"
+private const val TAG = "RelayMainActivity"
 
 class MainActivity : ComponentActivity() {
 
@@ -39,11 +46,15 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    private val openFullScreenIntentSettings =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         NotificationChannels.ensure(this)
         micRequests = MicPermissionBinder(this, mic)
+        askForFullScreenIntentAccess()
         routeFromPush(intent)
 
         lifecycleScope.launch {
@@ -92,6 +103,15 @@ class MainActivity : ComponentActivity() {
         if (granted) return
         permissionAsked = true
         requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private fun askForFullScreenIntentAccess() {
+        if (FullScreenIntentAccess.isGranted(this)) return
+        val prefs = getSharedPreferences(CALL_PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_FULL_SCREEN_ASKED, false)) return
+        prefs.edit { putBoolean(KEY_FULL_SCREEN_ASKED, true) }
+        runCatching { openFullScreenIntentSettings.launch(FullScreenIntentAccess.settingsIntent(this)) }
+            .onFailure { Log.w(TAG, "no settings screen for full-screen-intent access", it) }
     }
 }
 

@@ -109,7 +109,14 @@ This mirrors the server's socket-XOR-push rule at the client level, and catches 
 **Catch up first, decide second.** `PushCoordinator` runs the REST catch-up *before* the suppression
 check, so an open chat still gets the message even though no notification is posted.
 
-Channels: separate channels for messages (default importance) and calls (high importance, with a custom ringtone), so users can configure them independently.
+Channels: separate channels for messages (default importance) and calls (high importance), so users
+can configure them independently. **The call channel is deliberately silent** — `IncomingCallRinger`
+plays the ringtone itself, because a channel sound plays once and cannot loop.
+
+**A channel's sound and importance are frozen at creation.** Changing them in code does nothing on a
+device that already has the channel, and deleting and recreating the same id restores the user's old
+settings. A behaviour change needs a *new* id; `calls` became `calls_v2` for exactly this reason, and
+`NotificationChannels.ensure` deletes the stale id so it does not linger in system settings.
 
 ---
 
@@ -124,14 +131,25 @@ not taken here because it is substantially more setup for behaviour a full-scree
 covers on a device that is awake.
 
 ```kotlin
-val notification = NotificationCompat.Builder(context, CALL_CHANNEL)
+val notification = NotificationCompat.Builder(context, CALL_CHANNEL_ID)
+    .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declineIntent, answerIntent))
     .setFullScreenIntent(pendingIntent, true)
     .setCategory(NotificationCompat.CATEGORY_CALL)
     .setOngoing(true)
     .build()
 ```
 
-On Android 14+ this requires the `USE_FULL_SCREEN_INTENT` permission, which is granted by default only for calling and alarm apps — when it is not held the notification degrades to a heads-up and the call still works.
+`CallStyle` is what makes the system render this as a call rather than a message: Answer / Decline
+buttons, caller `Person`, call ranking in the shade. It matters most when the full-screen intent does
+*not* fire, because the heads-up is then the only affordance the user gets. Answer opens
+`CallActivity` with `EXTRA_ANSWER_CALL` — accepting needs `RECORD_AUDIO`, and the prompt needs an
+activity. Decline goes to `CallActionReceiver`, which needs none.
+
+On Android 14+ the full-screen intent requires `USE_FULL_SCREEN_INTENT`, granted at install only to
+calling and alarm apps. Sideloaded builds do not get it, and the ring silently degrades to a
+heads-up. `FullScreenIntentAccess` reports whether it is held; `MainActivity` sends the user to
+`ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` once per install when it is not, and `CallNotifier` logs
+the degrade so it is visible in logcat rather than mysterious.
 
 Unlike iOS, Android imposes no obligation to report the call within a deadline. The constraint is only that a high-priority FCM push must arrive.
 
@@ -139,6 +157,17 @@ Unlike iOS, Android imposes no obligation to report the call within a deadline. 
 backgrounded app that still holds its socket receives the invite as a frame and no push.
 `RelayApplication` watches the call session and posts the same notification whenever a call reaches
 `INCOMING` while `AppPresence` reports the app is not foregrounded.
+
+**The ring is the app's own, not the channel's.** `IncomingCallRinger` loops the user's default
+ringtone through a `MediaPlayer` with `USAGE_NOTIFICATION_RINGTONE`, vibrates on a repeating pattern,
+and takes transient audio focus. It follows `AudioManager.ringerMode` — silent rings nothing, vibrate
+skips the tone — and stops itself after 60s in case a session never settles. It is driven purely by
+call-session state in `RelayApplication`, so it also rings while the app is foregrounded, where the
+in-app overlay shows and no notification is posted.
+
+**Outgoing calls get a ringback.** `OutgoingRingbackTone` plays `TONE_SUP_RINGTONE` on
+`STREAM_VOICE_CALL` for the `DIALING` and `RINGING` stages of a direct call, so the caller hears the
+standard 2s-on / 4s-off tone through whatever the call is routed to. See `docs/CALLS.md` §4.
 
 **An answered call needs a `microphone` foreground service.** Android cuts microphone access to a
 backgrounded process without one; `CallForegroundService` runs for the life of the call.

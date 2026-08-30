@@ -8,6 +8,8 @@ import com.relay.call.CallSession
 import com.relay.call.CallStage
 import com.relay.call.GroupCallSession
 import com.relay.call.GroupCallStage
+import com.relay.call.IncomingCallRinger
+import com.relay.call.OutgoingRingbackTone
 import com.relay.di.initKoin
 import com.relay.push.AppPresence
 import com.relay.push.DeviceTokenRegistrar
@@ -61,21 +63,32 @@ class RelayApplication : Application() {
                 CallForegroundService.stop(this)
             }
         }
+        ringBack(direct)
         ringIfUnseen(direct, group)
     }
 
+    private fun ringBack(direct: CallSession?) {
+        val waitingForAnswer = direct != null && direct.isOutgoing &&
+            (direct.stage == CallStage.DIALING || direct.stage == CallStage.RINGING)
+        if (waitingForAnswer) OutgoingRingbackTone.start() else OutgoingRingbackTone.stop()
+    }
+
     private suspend fun ringIfUnseen(direct: CallSession?, group: GroupCallSession?) {
-        if (presence.foreground.value) {
-            dismissRinging()
-            return
-        }
         val ringingDirect = direct?.takeIf { it.stage == CallStage.INCOMING }
         val ringingGroup = group?.takeIf { it.stage == GroupCallStage.INCOMING }
+        if (ringingDirect == null && ringingGroup == null) {
+            stopRinging()
+            return
+        }
+        IncomingCallRinger.start(this)
+        if (presence.foreground.value) {
+            dismissRingingNotification()
+            return
+        }
         when {
             ringingDirect != null -> showRinging(ringingDirect.callId, peerNameOf(ringingDirect), isGroup = false)
             ringingGroup != null ->
                 showRinging(ringingGroup.callId, initiatorNameOf(ringingGroup), isGroup = true)
-            else -> dismissRinging()
         }
     }
 
@@ -85,7 +98,12 @@ class RelayApplication : Application() {
         callNotifier.showIncoming(callId, callerName, isGroup)
     }
 
-    private fun dismissRinging() {
+    private fun stopRinging() {
+        IncomingCallRinger.stop()
+        dismissRingingNotification()
+    }
+
+    private fun dismissRingingNotification() {
         if (ringingCallId == null) return
         ringingCallId = null
         callNotifier.dismissIncoming()

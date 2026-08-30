@@ -1,5 +1,6 @@
 package com.relay.call
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -38,6 +39,33 @@ class CallActivity : ComponentActivity() {
             RelayTheme {
                 CallHost()
             }
+        }
+        answerIfAsked(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notifier.dismissIncoming()
+        answerIfAsked(intent)
+    }
+
+    private fun answerIfAsked(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_ANSWER_CALL, false) != true) return
+        intent.removeExtra(EXTRA_ANSWER_CALL)
+        lifecycleScope.launch { answerIncoming() }
+    }
+
+    private suspend fun answerIncoming() {
+        val direct = calls.session.value?.stage == CallStage.INCOMING
+        val group = groupCalls.session.value?.stage == GroupCallStage.INCOMING
+        if (!direct && !group) return
+        val granted = mic.ensureGranted()
+        when {
+            direct && granted -> calls.accept()
+            direct -> calls.reject()
+            granted -> groupCalls.accept()
+            else -> groupCalls.decline()
         }
     }
 

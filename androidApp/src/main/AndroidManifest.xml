@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
@@ -32,10 +33,15 @@
             android:name=".call.CallActivity"
             android:exported="false"
             android:launchMode="singleTop"
-            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:excludeFromRecents="true"
             android:taskAffinity=".call"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <receiver
+            android:name=".call.CallActionReceiver"
+            android:exported="false" />
 
         <service
             android:name=".call.CallForegroundService"
