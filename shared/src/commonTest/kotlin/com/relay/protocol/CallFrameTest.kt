@@ -135,4 +135,63 @@ class CallFrameTest {
 
         assertIs<CallSignal.Unknown>(assertIs<InboundFrame.CallSignalFrame>(frame).signal)
     }
+
+    @Test
+    fun aGroupInviteSignalCarriesTheRoster() {
+        val frame = parseInboundFrame(
+            """
+            {"v":1,"type":"call.signal","ts":1,
+             "payload":{"call_id":"$CALL_ID","from_user_id":"caller-1",
+               "signal":{"verb":"group_invite","kind":"group","media":"audio",
+                 "started_at":"2026-07-26T10:00:00Z","ring_expires_at":"2026-07-26T10:00:40Z",
+                 "participants":[
+                   {"user_id":"caller-1","state":"joined"},
+                   {"user_id":"me","state":"invited"}]}}}
+            """.trimIndent()
+        )
+
+        val invite = assertIs<CallSignal.GroupInvite>(
+            assertIs<InboundFrame.CallSignalFrame>(frame).signal
+        )
+        assertEquals("audio", invite.media)
+        assertEquals("2026-07-26T10:00:40Z", invite.ringExpiresAt)
+        assertEquals(
+            listOf("caller-1" to "joined", "me" to "invited"),
+            invite.participants.map { it.userId to it.state }
+        )
+    }
+
+    @Test
+    fun rosterDeltaSignalsCarryTheParticipant() {
+        val frame = parseInboundFrame(
+            """
+            {"v":1,"type":"call.signal","ts":1,
+             "payload":{"call_id":"$CALL_ID","from_user_id":"peer-1",
+               "signal":{"verb":"participant_left","user_id":"peer-1","reason":"disconnected"}}}
+            """.trimIndent()
+        )
+
+        val left = assertIs<CallSignal.ParticipantLeft>(
+            assertIs<InboundFrame.CallSignalFrame>(frame).signal
+        )
+        assertEquals("peer-1", left.userId)
+        assertEquals("disconnected", left.reason)
+    }
+
+    @Test
+    fun aGroupEndedSignalCarriesReasonAndDuration() {
+        val frame = parseInboundFrame(
+            """
+            {"v":1,"type":"call.signal","ts":1,
+             "payload":{"call_id":"$CALL_ID","from_user_id":"caller-1",
+               "signal":{"verb":"group_ended","reason":"all_left","duration_s":42}}}
+            """.trimIndent()
+        )
+
+        val ended = assertIs<CallSignal.GroupEnded>(
+            assertIs<InboundFrame.CallSignalFrame>(frame).signal
+        )
+        assertEquals(CallEndReason.ALL_LEFT, ended.reason)
+        assertEquals(42L, ended.durationSeconds)
+    }
 }

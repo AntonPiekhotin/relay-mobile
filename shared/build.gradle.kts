@@ -63,6 +63,7 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.sqldelight.android.driver)
             implementation(libs.webrtc.android)
+            implementation(libs.livekit.android)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

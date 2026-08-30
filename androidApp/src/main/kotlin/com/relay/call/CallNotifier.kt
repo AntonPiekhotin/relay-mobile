@@ -25,17 +25,17 @@ private const val MISSED_CALL_ID_OFFSET = 5000
 class CallNotifier(private val context: Context) {
 
     fun showIncoming(display: PushDisplay.IncomingCall) {
-        showIncoming(callId = display.callId, callerName = display.callerName)
+        showIncoming(callId = display.callId, callerName = display.callerName, isGroup = display.isGroup)
     }
 
-    fun showIncoming(callId: String, callerName: String) {
+    fun showIncoming(callId: String, callerName: String, isGroup: Boolean = false) {
         if (!canPost()) return
         NotificationChannels.ensure(context)
         val fullScreen = callScreenIntent(callId)
         val notification = NotificationCompat.Builder(context, CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(callerName)
-            .setContentText(context.getString(R.string.call_incoming))
+            .setContentText(context.getString(if (isGroup) R.string.call_incoming_group else R.string.call_incoming))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
@@ -52,7 +52,7 @@ class CallNotifier(private val context: Context) {
         val notification = NotificationCompat.Builder(context, MESSAGE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(display.callerName)
-            .setContentText(context.getString(R.string.call_missed))
+            .setContentText(context.getString(if (display.isGroup) R.string.call_missed_group else R.string.call_missed))
             .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
             .setAutoCancel(true)
             .build()

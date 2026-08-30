@@ -28,6 +28,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun HomeScreen(
     onOpenDialog: (String) -> Unit,
+    onNewGroupCall: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -51,7 +52,7 @@ fun HomeScreen(
             pageStateHolder.SaveableStateProvider(tabName) {
                 when (tab) {
                     HomeTab.CONTACTS -> ContactsTab(onOpenDialog = onOpenDialog)
-                    HomeTab.CALLS -> CallsTab(onOpenDialog = onOpenDialog)
+                    HomeTab.CALLS -> CallsTab(onOpenDialog = onOpenDialog, onNewGroupCall = onNewGroupCall)
                     HomeTab.CHATS -> DialogListScreen(state = dialogsState, onOpenDialog = onOpenDialog)
                     HomeTab.SEARCH -> SearchTab(onOpenDialog = onOpenDialog)
                     HomeTab.SETTINGS -> SettingsTab(onLogout = onLogout)
@@ -93,14 +94,15 @@ private fun SearchTab(onOpenDialog: (String) -> Unit) {
 }
 
 @Composable
-private fun CallsTab(onOpenDialog: (String) -> Unit) {
+private fun CallsTab(onOpenDialog: (String) -> Unit, onNewGroupCall: () -> Unit) {
     val viewModel = koinViewModel<CallsViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     CallsScreen(
         state = state,
         onOpenDialog = onOpenDialog,
         onCallBack = viewModel::callBack,
-        onRetry = viewModel::refresh
+        onRetry = viewModel::refresh,
+        onNewGroupCall = onNewGroupCall
     )
 }
 

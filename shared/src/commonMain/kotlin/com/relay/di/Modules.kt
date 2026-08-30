@@ -3,7 +3,9 @@ package com.relay.di
 import com.relay.auth.AuthState
 import com.relay.auth.SessionManager
 import com.relay.call.CallEngine
+import com.relay.call.GroupCallEngine
 import com.relay.call.RtcClientFactory
+import com.relay.call.SfuClientFactory
 import com.relay.concurrency.ioDispatcher
 import com.relay.db.ContactStore
 import com.relay.db.MessageStore
@@ -12,9 +14,11 @@ import com.relay.db.RelayDb
 import com.relay.network.AuthApi
 import com.relay.network.CallApi
 import com.relay.network.ConnectionManager
+import com.relay.network.GroupCallApi
 import com.relay.network.HttpClientFactory
 import com.relay.network.KtorAuthApi
 import com.relay.network.KtorCallApi
+import com.relay.network.KtorGroupCallApi
 import com.relay.network.KtorMessageApi
 import com.relay.network.KtorNotificationApi
 import com.relay.network.KtorUserApi
@@ -33,6 +37,8 @@ import com.relay.push.PushPlatform
 import com.relay.repository.CallRepository
 import com.relay.repository.CallRepositoryImpl
 import com.relay.repository.ConnectionStatus
+import com.relay.repository.GroupCallRepository
+import com.relay.repository.GroupCallRepositoryImpl
 import com.relay.repository.MessageRepository
 import com.relay.repository.MessageRepositoryImpl
 import com.relay.repository.PeerNameResolver
@@ -46,6 +52,8 @@ import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.ui.SessionViewModel
 import com.relay.ui.call.CallViewModel
+import com.relay.ui.call.GroupCallPickerViewModel
+import com.relay.ui.call.GroupCallViewModel
 import com.relay.ui.calls.CallsViewModel
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.dialogs.DialogListViewModel
@@ -72,6 +80,7 @@ val commonModule = module {
     single { PushStore(get(), ioDispatcher(), get<PushPlatform>().name) }
     single<MessageApi> { KtorMessageApi(get(), get(), get()) }
     single<CallApi> { KtorCallApi(get(), get(), get()) }
+    single<GroupCallApi> { KtorGroupCallApi(get(), get(), get()) }
     single<NotificationApi> { KtorNotificationApi(get(), get(), get()) }
     single { Outbox(get(), get(), get(), get()) }
     single { ReadReceipts(get(), get()) }
@@ -81,14 +90,26 @@ val commonModule = module {
             (session.state.value as? AuthState.LoggedIn)?.userId
         }
     }
-    single { CallEngine(get(), get(), get<RtcClientFactory>(), get()) }
+    single {
+        val koin = getKoin()
+        CallEngine(get(), get(), get<RtcClientFactory>(), get(), {
+            koin.get<GroupCallEngine>().hasLiveSession
+        })
+    }
+    single {
+        val koin = getKoin()
+        GroupCallEngine(get(), get(), get<SfuClientFactory>(), get(), {
+            koin.get<CallEngine>().session.value?.isSettled == false
+        })
+    }
     single<CallRepository> { CallRepositoryImpl(get(), get()) }
+    single<GroupCallRepository> { GroupCallRepositoryImpl(get(), get()) }
     single { PresenceEngine(get(), get()) }
     single<PresenceRepository> { PresenceRepositoryImpl(get()) }
     single { AppPresence() }
     single { PushPermissionRequests() }
     single { PushNavigator() }
-    single { PushCoordinator(get(), get(), get(), get(), get(), get()) }
+    single { PushCoordinator(get(), get(), get(), get(), get(), get(), get()) }
     single { DeviceTokenRegistrar(get(), get(), get(), get()) }
     single<MessageRepository> { MessageRepositoryImpl(get(), get(), get(), get(), get()) }
     single { ContactStore(get(), ioDispatcher()) }
@@ -96,12 +117,14 @@ val commonModule = module {
     single<UserRepository> { UserRepositoryImpl(get(), get()) }
     single { PeerNameResolver(get(), get(), get(), get()) }
     single<ConnectionStatus> { SocketConnectionStatus(get()) }
-    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
     factory { (dialogId: String) ->
         ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get(), get())
     }
     factory { CallViewModel(get(), get()) }
+    factory { GroupCallViewModel(get(), get()) }
+    factory { GroupCallPickerViewModel(get(), get(), get()) }
     factory { CallsViewModel(get(), get(), get(), get()) }
     factory { PeopleViewModel(get(), get()) }
     factory { ProfileViewModel(get()) }

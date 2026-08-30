@@ -32,6 +32,7 @@ import com.relay.ui.state.CallLogUi
 import com.relay.ui.state.CallsState
 
 const val CALLS_RETRY_TAG = "calls-retry"
+const val CALLS_NEW_GROUP_TAG = "calls-new-group"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,11 +41,24 @@ fun CallsScreen(
     onOpenDialog: (String) -> Unit,
     onCallBack: (CallLogUi) -> Unit,
     onRetry: () -> Unit,
+    onNewGroupCall: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text("Calls") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Calls") },
+                actions = {
+                    TextButton(
+                        onClick = onNewGroupCall,
+                        modifier = Modifier.testTag(CALLS_NEW_GROUP_TAG)
+                    ) {
+                        Text("New group call")
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (state.isLoading) {

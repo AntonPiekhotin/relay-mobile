@@ -18,6 +18,12 @@ object CallVerb {
     const val CANCEL = "cancel"
     const val MISSED = "missed"
     const val STATE = "state"
+    const val GROUP_INVITE = "group_invite"
+    const val PARTICIPANT_JOINED = "participant_joined"
+    const val PARTICIPANT_LEFT = "participant_left"
+    const val PARTICIPANT_DECLINED = "participant_declined"
+    const val PARTICIPANT_MISSED = "participant_missed"
+    const val GROUP_ENDED = "group_ended"
 }
 
 object CallEndReason {
@@ -28,6 +34,16 @@ object CallEndReason {
     const val RING_TIMEOUT = "ring_timeout"
     const val ANSWERED_ELSEWHERE = "answered_elsewhere"
     const val SETTLED_ELSEWHERE = "settled_elsewhere"
+    const val ALL_DECLINED = "all_declined"
+    const val ALL_LEFT = "all_left"
+}
+
+object GroupParticipantState {
+    const val INVITED = "invited"
+    const val JOINED = "joined"
+    const val DECLINED = "declined"
+    const val MISSED = "missed"
+    const val LEFT = "left"
 }
 
 object CallStatusWire {
@@ -94,8 +110,27 @@ sealed interface CallSignal {
     data class Cancel(val reason: String?) : CallSignal
     data class Missed(val reason: String?) : CallSignal
     data class State(val status: String?) : CallSignal
+
+    data class GroupInvite(
+        val media: String,
+        val startedAt: String?,
+        val ringExpiresAt: String?,
+        val participants: List<GroupParticipantWire>
+    ) : CallSignal
+
+    data class ParticipantJoined(val userId: String) : CallSignal
+    data class ParticipantLeft(val userId: String, val reason: String?) : CallSignal
+    data class ParticipantDeclined(val userId: String, val reason: String?) : CallSignal
+    data class ParticipantMissed(val userId: String) : CallSignal
+    data class GroupEnded(val reason: String?, val durationSeconds: Long?) : CallSignal
     data class Unknown(val verb: String?) : CallSignal
 }
+
+@Serializable
+data class GroupParticipantWire(
+    @SerialName("user_id") val userId: String,
+    @SerialName("state") val state: String = GroupParticipantState.INVITED
+)
 
 @Serializable
 private data class InviteSignalBody(
@@ -122,6 +157,20 @@ private data class HangupSignalBody(
     @SerialName("duration_s") val durationSeconds: Long? = null
 )
 
+@Serializable
+private data class GroupInviteSignalBody(
+    @SerialName("media") val media: String = MEDIA_AUDIO,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("ring_expires_at") val ringExpiresAt: String? = null,
+    @SerialName("participants") val participants: List<GroupParticipantWire> = emptyList()
+)
+
+@Serializable
+private data class ParticipantSignalBody(
+    @SerialName("user_id") val userId: String,
+    @SerialName("reason") val reason: String? = null
+)
+
 fun parseCallSignal(signal: JsonObject): CallSignal {
     val verb = (signal[CALL_SIGNAL_VERB] as? JsonPrimitive)?.takeIf { it.isString }?.content
     return try {
@@ -144,6 +193,27 @@ fun parseCallSignal(signal: JsonObject): CallSignal {
             CallVerb.CANCEL -> CallSignal.Cancel(signal.stringOrNull(CALL_SIGNAL_REASON))
             CallVerb.MISSED -> CallSignal.Missed(signal.stringOrNull(CALL_SIGNAL_REASON))
             CallVerb.STATE -> CallSignal.State(signal.stringOrNull(CALL_SIGNAL_STATUS))
+            CallVerb.GROUP_INVITE -> signal.decode(GroupInviteSignalBody.serializer()).let {
+                CallSignal.GroupInvite(
+                    media = it.media,
+                    startedAt = it.startedAt,
+                    ringExpiresAt = it.ringExpiresAt,
+                    participants = it.participants
+                )
+            }
+            CallVerb.PARTICIPANT_JOINED ->
+                CallSignal.ParticipantJoined(signal.decode(ParticipantSignalBody.serializer()).userId)
+            CallVerb.PARTICIPANT_LEFT -> signal.decode(ParticipantSignalBody.serializer()).let {
+                CallSignal.ParticipantLeft(userId = it.userId, reason = it.reason)
+            }
+            CallVerb.PARTICIPANT_DECLINED -> signal.decode(ParticipantSignalBody.serializer()).let {
+                CallSignal.ParticipantDeclined(userId = it.userId, reason = it.reason)
+            }
+            CallVerb.PARTICIPANT_MISSED ->
+                CallSignal.ParticipantMissed(signal.decode(ParticipantSignalBody.serializer()).userId)
+            CallVerb.GROUP_ENDED -> signal.decode(HangupSignalBody.serializer()).let {
+                CallSignal.GroupEnded(reason = it.reason, durationSeconds = it.durationSeconds)
+            }
             else -> CallSignal.Unknown(verb)
         }
     } catch (e: SerializationException) {

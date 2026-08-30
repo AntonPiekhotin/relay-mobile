@@ -1,8 +1,11 @@
 package com.relay.push
 
 import com.relay.call.CallEngine
+import com.relay.call.GroupCallEngine
 import com.relay.call.IosRtc
+import com.relay.call.IosSfu
 import com.relay.call.RtcClientFactory
+import com.relay.call.SfuClientFactory
 import com.relay.di.ensureKoinStarted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -23,9 +26,18 @@ object SharedBridge {
         IosRtc.factory = factory
     }
 
+    fun registerSfuFactory(factory: SfuClientFactory) {
+        IosSfu.factory = factory
+    }
+
     fun onIncomingCallPush(callId: String, callerId: String, media: String, ringExpiresAt: String?) {
         ensureKoinStarted()
         resolve<CallEngine>().onIncomingCallPush(callId, callerId, media, ringExpiresAt)
+    }
+
+    fun onIncomingGroupCallPush(callId: String, callerId: String, media: String, ringExpiresAt: String?) {
+        ensureKoinStarted()
+        resolve<GroupCallEngine>().onIncomingGroupCallPush(callId, callerId, media, ringExpiresAt)
     }
 
     fun registerApnsToken(token: String) {

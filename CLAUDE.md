@@ -105,12 +105,16 @@ Build order — do not skip ahead, each phase depends on the previous:
       no CallKit and no ConnectionService, so iOS cannot ring a backgrounded app (same
       `aps-environment` blocker as phase 4) and Android rings via a full-screen intent. Read
       `docs/CALLS.md` before touching any of it.
+- [x] **7. Group calls** — audio, REST-driven control (`GroupCallEngine` beside `CallEngine`),
+      media through the LiveKit SFU via the `SfuClient` platform port (livekit-android /
+      client-sdk-swift). Entry: contact picker on the Calls tab. Same foreground-only caveats as
+      phase 6. See `docs/CALLS.md` §8 and `docs/PROTOCOL.md` §4.5.
 
 ## Backend reality check
 
 The backend is ahead of the client in some areas and behind in others. Current backend state:
 
-- **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, presence/typing (`presence.subscribe`/`unsubscribe`, `presence.update`, `typing.start` — see `docs/PROTOCOL.md` §4.2), call-log / ICE-server / device-token REST endpoints.
+- **Implemented:** WebSocket send/ack over Kafka, real-time delivery to connected clients, auth (login/register/refresh), call signaling, group calls (REST `/api/v1/call/group-calls` + LiveKit SFU + webhooks — `docs/PROTOCOL.md` §4.5), presence/typing (`presence.subscribe`/`unsubscribe`, `presence.update`, `typing.start` — see `docs/PROTOCOL.md` §4.2), call-log / ICE-server / device-token REST endpoints.
 - **Implemented (client-facing REST):** profile/search/contacts (`/api/v1/user/**`), and `POST /api/v1/message/dialogs` — opening the direct dialog with a peer, the only way a client obtains a dialog id.
 - **Implemented (push):** notification-service consumes the `notifications` topic and fans out to FCM
   (`FcmPushSender`, behind `relay.push.fcm.enabled`). Device tokens register through

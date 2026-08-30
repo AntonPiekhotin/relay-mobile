@@ -353,7 +353,8 @@ producer exists; note that the payload has no `body` field, unlike an earlier dr
 
 ### 4.4 Calls — implemented (direct calls, two participants)
 
-Group calls are not implemented. Everything below is 1:1.
+Everything below is 1:1 — group calls are §4.5 and never use these frames; sending a group call's
+id in any of them yields `CALL_NOT_FOUND` or `INVALID_CALL_STATE`.
 
 #### Inbound: one frame type per verb (C→S)
 
@@ -418,6 +419,79 @@ after the call was taken on a tablet.
   `ring_expires_at` on the invite is the honest deadline — do not run your own shorter one.
 - **A missed or rejected call frees both parties immediately**; a new call can be placed at once.
 - **`duration_s` is talk time, not ring time.** It is absent for a call that was never answered.
+
+### 4.5 Group calls — implemented (audio, LiveKit SFU)
+
+Media goes through a LiveKit SFU, never peer-to-peer: there is no SDP and no ICE to relay, so the
+control plane is **REST, not frames** — create and join must hand back an SFU room token
+synchronously. Outbound, everything still rides the opaque `call.signal` frame (§4.4), with six new
+verbs a 1:1-only client safely ignores.
+
+#### The REST surface
+
+All under `/api/v1/call/group-calls`, camelCase, `Authorization: Bearer`. The caller is always the
+token's subject. `sessionId` (from `session.connected`) is optional everywhere and only excludes
+the acting device from its own `cancel`.
+
+```
+POST /api/v1/call/group-calls
+{ "callId": "<client-generated UUID v4>", "media": "audio"|"video",
+  "inviteeIds": ["<userId>", ...], "sessionId": "<optional>" }
+
+201 → { "callId": "...", "kind": "group", "media": "audio", "status": "ringing",
+        "initiator": "...", "startedAt": "...", "ringExpiresAt": "...",
+        "answeredAt": null, "endedAt": null, "endReason": null, "durationSeconds": null,
+        "participants": [ { "userId": "...", "state": "joined" },
+                          { "userId": "...", "state": "invited" } ],
+        "livekit": { "url": "ws://<host>:7880", "token": "<jwt>", "expiresAt": "..." } }
+
+POST /api/v1/call/group-calls/{callId}/join      { "sessionId"? }            → 200, with livekit
+POST /api/v1/call/group-calls/{callId}/decline   { "reason"?, "sessionId"? } → 200, livekit null
+POST /api/v1/call/group-calls/{callId}/leave     { "sessionId"? }            → 200, livekit null
+GET  /api/v1/call/group-calls/{callId}                                       → 200, livekit null
+```
+
+- **The client generates `callId`**, exactly as in §4.4: a retried create with the same id is the
+  same call — answered `200` instead of `201`, re-rung while it still rings.
+- **`livekit` is present only where the caller is admitted to the room** — create, and join. Hand
+  `url` and `token` to the LiveKit client SDK; the room name is the `callId` and the identity is
+  your user id. **Re-joining is the token refresh** on a reconnect, otherwise an idempotent no-op.
+- **Join is legal from `invited`, `declined`, and `left`.** A terminal call answers `422`.
+- **Busy is decided at join, not at invite.** A ringing invitee is not busy; someone on another
+  call gets `409` from the join itself. One busy invitee cannot fail the call.
+- **Decline is only for a ringing invitee** (`422` otherwise); joined participants `leave`, which
+  is idempotent — the SFU's webhook may have said it first.
+- Participant `state` is `invited | joined | declined | missed | left`. At most 16 participants.
+- Errors: `404` unknown call, `403` not a participant, `409` busy, `422` wrong state, `400` for a
+  direct call's id or invalid invitees.
+- **One device per user in the room**: LiveKit disconnects an earlier connection with the same
+  identity; multi-device answer settles via `cancel`, as in §4.4.
+
+#### Outbound: the same opaque `call.signal` frame, six new verbs
+
+| `signal.verb` | Meaning | Other `signal` keys |
+|---|---|---|
+| `group_invite` | You are invited — join over REST | `kind`, `media`, `started_at`, `ring_expires_at`, `participants` |
+| `participant_joined` | Roster delta | `user_id` |
+| `participant_left` | Roster delta; the call goes on | `user_id`, `reason` |
+| `participant_declined` | Roster delta | `user_id`, `reason` |
+| `participant_missed` | An invitee rang out; sent to **everyone including them** — their devices stop ringing on it | `user_id` |
+| `group_ended` | The call is over for everyone | `reason`, `duration_s` |
+
+- **`group_invite` carries no SDP** — there is nothing to negotiate with the server. `participants`
+  is the roster as `[{"user_id": ..., "state": ...}]`.
+- **`ring_expires_at` is the honest deadline** — after ~40s the invitee is individually `missed`
+  (the call continues if anyone joined) or the whole call is missed with a `MISSED_CALL` push per
+  invitee.
+- `cancel` (§4.4) is reused unchanged for your own other devices when you join or decline anywhere.
+- `group_ended` reasons: `caller_canceled`, `all_declined`, `all_left`, `ring_timeout`.
+- An offline invitee is rung by the same data-only `INCOMING_CALL` push as §4.4, with an added
+  `callKind: "group"` field (§5.5).
+
+#### Media
+
+Through the LiveKit SFU only. **Do not fetch `ice-servers` for a group call** — the LiveKit SDK
+negotiates its own transport with the token.
 - **ICE is exempt from rate limiting** when the limiter lands (§9). It arrives as a burst by design.
 
 #### Media
@@ -498,7 +572,11 @@ GET /api/v1/call/ice-servers
 ```
 
 Hand `iceServers` to `RTCPeerConnection` unchanged. TURN credentials are minted per request and
-expire — refetch before `ttlSeconds` elapses rather than caching them indefinitely.
+expire — refetch before `ttlSeconds` elapses rather than caching them indefinitely. Direct calls
+only — a group call's transport is negotiated by the LiveKit SDK (§4.5).
+
+The group-call endpoints (`/api/v1/call/group-calls` — create, join, decline, leave, describe) are
+specified in §4.5 alongside the signals they raise.
 
 ```
 GET /api/v1/call/calls?before=<callId>&limit=50
@@ -799,8 +877,11 @@ DELETE /api/v1/notification/device-tokens/{deviceId}
 | `kind` | Other `data` keys | Notification block |
 |---|---|---|
 | `MESSAGE_NEW` | `dialogId`, `messageId`, `senderId` | yes — title/body drawn by the OS |
-| `INCOMING_CALL` | `callId`, `callerId`, `media`, `ringExpiresAt` | **no** — data-only, `content-available` |
-| `MISSED_CALL` | `callId`, `callerId`, `media` | yes |
+| `INCOMING_CALL` | `callId`, `callerId`, `media`, `ringExpiresAt`, `callKind?` | **no** — data-only, `content-available` |
+| `MISSED_CALL` | `callId`, `callerId`, `media`, `callKind?` | yes |
+
+- **`callKind` is `"group"` for a group call** and absent (or `"null"`) for a direct one. A group
+  ring is answered by joining over REST (§4.5), never by waiting for an SDP.
 
 - **Identifiers, not content.** The message text rides along in the `notification` body for display
   only; the client catches up over §5.1 to get the message itself. Treat a push as a hint that

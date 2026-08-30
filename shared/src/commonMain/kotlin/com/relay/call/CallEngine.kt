@@ -46,6 +46,7 @@ class CallEngine(
     private val api: CallApi,
     private val rtcFactory: RtcClientFactory,
     private val scope: CoroutineScope,
+    private val otherCallActive: () -> Boolean = { false },
     private val now: () -> Long = ::nowEpochMillis
 ) {
     private val mutableSession = MutableStateFlow<CallSession?>(null)
@@ -176,7 +177,7 @@ class CallEngine(
 
     private fun onPlace(event: Event.Place) {
         val existing = mutableSession.value
-        if (existing != null && !existing.isSettled) {
+        if (existing != null && !existing.isSettled || otherCallActive()) {
             event.result.complete(PlaceCallResult.Rejected(ALREADY_IN_CALL))
             return
         }
@@ -249,7 +250,7 @@ class CallEngine(
             is CallSignal.Missed ->
                 endIfCurrent(frame.callId, signal.reason ?: CallEndReason.RING_TIMEOUT)
             is CallSignal.State -> onRemoteState(frame.callId, signal.status)
-            is CallSignal.Unknown -> Unit
+            else -> Unit
         }
     }
 
@@ -269,7 +270,7 @@ class CallEngine(
             }
             return
         }
-        if (current != null && !current.isSettled) {
+        if (current != null && !current.isSettled || otherCallActive()) {
             send(callRejectFrame(callId, BUSY_HERE))
             return
         }
@@ -290,7 +291,7 @@ class CallEngine(
 
     private fun onIncomingPush(event: Event.IncomingPush) {
         val current = mutableSession.value
-        if (current != null && !current.isSettled) return
+        if (current != null && !current.isSettled || otherCallActive()) return
         resetCallState()
         mutableSession.value = CallSession(
             callId = event.callId,

@@ -24,6 +24,11 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
+        maven("https://jitpack.io") {
+            mavenContent {
+                includeGroup("com.github.davidliu")
+            }
+        }
     }
 }
 

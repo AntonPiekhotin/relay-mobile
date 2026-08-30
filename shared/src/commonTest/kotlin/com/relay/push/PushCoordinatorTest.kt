@@ -1,14 +1,17 @@
 package com.relay.push
 
 import com.relay.call.CallEngine
+import com.relay.call.GroupCallEngine
 import com.relay.db.MessageStore
 import com.relay.network.MessageApiResult
 import com.relay.sync.Outbox
 import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.testutil.FakeCallApi
+import com.relay.testutil.FakeGroupCallApi
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeRtcClientFactory
+import com.relay.testutil.FakeSfuClientFactory
 import com.relay.testutil.FakeSocket
 import com.relay.testutil.FakeSocketLifecycle
 import com.relay.testutil.FakeUserRepository
@@ -54,6 +57,13 @@ private class CoordinatorHarness(scope: TestScope) {
         scope = scope.backgroundScope,
         now = { scope.testScheduler.currentTime }
     )
+    val groupCalls = GroupCallEngine(
+        socket = socket,
+        api = FakeGroupCallApi(),
+        sfuFactory = FakeSfuClientFactory(),
+        scope = scope.backgroundScope,
+        now = { scope.testScheduler.currentTime }
+    )
     val lifecycle = FakeSocketLifecycle()
     val users = FakeUserRepository()
     val coordinator = PushCoordinator(
@@ -61,6 +71,7 @@ private class CoordinatorHarness(scope: TestScope) {
         store = store,
         presence = presence,
         calls = calls,
+        groupCalls = groupCalls,
         connection = lifecycle,
         users = users,
         now = { scope.testScheduler.currentTime }

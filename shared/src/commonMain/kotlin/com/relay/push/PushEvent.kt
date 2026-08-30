@@ -3,6 +3,7 @@ package com.relay.push
 const val KIND_MESSAGE_NEW = "MESSAGE_NEW"
 const val KIND_INCOMING_CALL = "INCOMING_CALL"
 const val KIND_MISSED_CALL = "MISSED_CALL"
+const val CALL_KIND_GROUP = "group"
 
 sealed interface PushEvent {
     data class NewMessage(
@@ -15,13 +16,15 @@ sealed interface PushEvent {
         val callId: String,
         val callerId: String,
         val media: String,
-        val ringExpiresAt: String?
+        val ringExpiresAt: String?,
+        val isGroup: Boolean = false
     ) : PushEvent
 
     data class MissedCall(
         val callId: String,
         val callerId: String,
-        val media: String
+        val media: String,
+        val isGroup: Boolean = false
     ) : PushEvent
 
     data object Unknown : PushEvent
@@ -38,12 +41,14 @@ fun parsePushEvent(data: Map<String, String>): PushEvent =
             callId = data.required("callId") ?: return PushEvent.Unknown,
             callerId = data.required("callerId") ?: return PushEvent.Unknown,
             media = data.required("media") ?: "voice",
-            ringExpiresAt = data.required("ringExpiresAt")
+            ringExpiresAt = data.required("ringExpiresAt"),
+            isGroup = data.required("callKind") == CALL_KIND_GROUP
         )
         KIND_MISSED_CALL -> PushEvent.MissedCall(
             callId = data.required("callId") ?: return PushEvent.Unknown,
             callerId = data.required("callerId") ?: return PushEvent.Unknown,
-            media = data.required("media") ?: "voice"
+            media = data.required("media") ?: "voice",
+            isGroup = data.required("callKind") == CALL_KIND_GROUP
         )
         else -> PushEvent.Unknown
     }

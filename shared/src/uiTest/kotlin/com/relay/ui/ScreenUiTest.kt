@@ -450,7 +450,8 @@ class ScreenUiTest {
                     ),
                     onOpenDialog = { opened += it },
                     onCallBack = { calledBack += it.id },
-                    onRetry = {}
+                    onRetry = {},
+                    onNewGroupCall = {}
                 )
             }
         }
@@ -471,7 +472,8 @@ class ScreenUiTest {
                     state = CallsState(isLoaded = true, error = "Cannot reach the server"),
                     onOpenDialog = {},
                     onCallBack = {},
-                    onRetry = { retried += Unit }
+                    onRetry = { retried += Unit },
+                    onNewGroupCall = {}
                 )
             }
         }
@@ -489,7 +491,8 @@ class ScreenUiTest {
                     state = CallsState(isLoaded = true),
                     onOpenDialog = {},
                     onCallBack = {},
-                    onRetry = {}
+                    onRetry = {},
+                    onNewGroupCall = {}
                 )
             }
         }

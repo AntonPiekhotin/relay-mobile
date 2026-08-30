@@ -11,8 +11,10 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.relay.repository.CallRepository
+import com.relay.repository.GroupCallRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -23,6 +25,7 @@ private const val TAG = "RelayCallService"
 class CallForegroundService : Service() {
 
     private val calls: CallRepository by inject()
+    private val groupCalls: GroupCallRepository by inject()
     private val scope: CoroutineScope by inject()
     private val notifier by lazy { CallNotifier(applicationContext) }
     private var watcher: Job? = null
@@ -30,15 +33,16 @@ class CallForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val session = calls.session.value
+        val callId = calls.session.value?.callId ?: groupCalls.session.value?.callId
         val peerName = intent?.getStringExtra(EXTRA_PEER_NAME).orEmpty()
-        if (!startForegroundWithMicrophone(notifier.ongoing(peerName, session?.callId))) {
+        if (!startForegroundWithMicrophone(notifier.ongoing(peerName, callId))) {
             stopSelf()
             return START_NOT_STICKY
         }
         if (watcher == null) {
             watcher = scope.launch {
-                calls.session.collect { current -> if (current == null) stopSelf() }
+                combine(calls.session, groupCalls.session) { direct, group -> direct == null && group == null }
+                    .collect { idle -> if (idle) stopSelf() }
             }
         }
         return START_NOT_STICKY

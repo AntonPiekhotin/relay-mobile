@@ -1,6 +1,7 @@
 package com.relay.push
 
 import com.relay.call.CallEngine
+import com.relay.call.GroupCallEngine
 import com.relay.db.MessageStore
 import com.relay.network.SocketLifecycle
 import com.relay.protocol.isoToEpochMillisOrNull
@@ -26,13 +27,15 @@ sealed interface PushDisplay {
         val callId: String,
         val callerId: String,
         val callerName: String,
-        val media: String
+        val media: String,
+        val isGroup: Boolean = false
     ) : PushDisplay
 
     data class MissedCall(
         val callId: String,
         val callerId: String,
-        val callerName: String
+        val callerName: String,
+        val isGroup: Boolean = false
     ) : PushDisplay
 }
 
@@ -41,6 +44,7 @@ class PushCoordinator(
     private val store: MessageStore,
     private val presence: AppPresence,
     private val calls: CallEngine,
+    private val groupCalls: GroupCallEngine,
     private val connection: SocketLifecycle,
     private val users: UserRepository,
     private val now: () -> Long = ::nowEpochMillis
@@ -69,18 +73,29 @@ class PushCoordinator(
         val expiresAt = event.ringExpiresAt?.let { isoToEpochMillisOrNull(it) }
         if (expiresAt != null && expiresAt <= now()) return PushDisplay.Suppress
         calls.start()
+        groupCalls.start()
         connection.start()
-        calls.onIncomingCallPush(
-            callId = event.callId,
-            callerId = event.callerId,
-            media = event.media,
-            ringExpiresAt = event.ringExpiresAt
-        )
+        if (event.isGroup) {
+            groupCalls.onIncomingGroupCallPush(
+                callId = event.callId,
+                callerId = event.callerId,
+                media = event.media,
+                ringExpiresAt = event.ringExpiresAt
+            )
+        } else {
+            calls.onIncomingCallPush(
+                callId = event.callId,
+                callerId = event.callerId,
+                media = event.media,
+                ringExpiresAt = event.ringExpiresAt
+            )
+        }
         return PushDisplay.IncomingCall(
             callId = event.callId,
             callerId = event.callerId,
             callerName = nameOf(event.callerId),
-            media = event.media
+            media = event.media,
+            isGroup = event.isGroup
         )
     }
 
@@ -88,7 +103,8 @@ class PushCoordinator(
         PushDisplay.MissedCall(
             callId = event.callId,
             callerId = event.callerId,
-            callerName = nameOf(event.callerId)
+            callerName = nameOf(event.callerId),
+            isGroup = event.isGroup
         )
 
     private suspend fun nameOf(userId: String): String =

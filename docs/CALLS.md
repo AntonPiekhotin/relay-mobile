@@ -1,9 +1,10 @@
 # Calls
 
-1:1 audio calls: signaling over the WebSocket, media peer-to-peer over WebRTC. The wire contract is
-`docs/PROTOCOL.md` §4.4 and §5.0 — this document is the client half.
+1:1 audio calls: signaling over the WebSocket, media peer-to-peer over WebRTC. Group audio calls:
+control over REST, media through a LiveKit SFU (§8). The wire contract is `docs/PROTOCOL.md` §4.4,
+§4.5 and §5.0 — this document is the client half.
 
-**Phase 6 as built: audio only, foreground only, no CallKit and no ConnectionService.** See §7 for
+**As built: audio only, foreground only, no CallKit and no ConnectionService.** See §7 for
 what that costs and what closes each gap.
 
 ---
@@ -20,10 +21,22 @@ what that costs and what closes each gap.
                                 └──────── RtcClient      ← platform, injected
                                           ├─ androidMain: WebRtcAudioClient
                                           └─ iosApp:      RelayRtcClient.swift
+
+        GroupCallRepository ── GroupCallEngine ── SocketClient   (call.signal, read-only)
+                                │
+                                ├──────── GroupCallApi   (REST: create/join/decline/leave)
+                                │
+                                └──────── SfuClient      ← platform, injected
+                                          ├─ androidMain: LivekitSfuClient
+                                          └─ iosApp:      RelaySfu.swift
 ```
 
 `CallEngine` owns every decision. It is the only thing that reads a signal, decides a stage, or
 sends a frame. Both platforms plug in one interface and hold no call logic of their own.
+`GroupCallEngine` is its sibling, built beside it rather than into it — the flows share almost
+nothing (REST-driven vs frame-driven, a roster instead of a peer, no SDP/ICE machinery). Each
+engine refuses to start or ring while the other holds a live session, via an injected
+`otherCallActive` probe wired in DI.
 
 **There is no call table.** Unlike messages, a call has no offline meaning: it exists while both
 parties are connected and is settled by the server the moment either leaves. Live state is in
@@ -163,6 +176,49 @@ signal verbs, including an unknown verb degrading to `Unknown` rather than faili
 - **CallKit / ConnectionService.** No system call UI, no interaction with cellular calls, no entry in
   the system call log. Android uses a full-screen intent instead; iOS uses the in-app overlay.
 - **Video.** The wire protocol carries `media` and the client always sends `audio`. Video needs
-  camera permission, video tracks, and platform renderer views.
+  camera permission, video tracks, and platform renderer views — for group calls the LiveKit SDK
+  makes most of that cheap, so video lands there first when it lands.
 - **Call history.** `CallApi.history` exists and is unused; there is no local table and no screen.
-- **Group calls.** Server-side too — it needs a `join` verb and an SFU, not a wider loop.
+
+---
+
+## 8. Group calls
+
+The wire contract is `docs/PROTOCOL.md` §4.5. Client shape, and where it deliberately differs from
+1:1:
+
+**Control is REST, not frames.** `GroupCallApi` calls create/join/decline/leave/describe; the
+socket only *delivers* — `group_invite` rings, roster deltas update the participant list,
+`group_ended` and `cancel` end it. `GroupCallEngine` sends no frames at all, so it has no
+`ref_id`-matched error handling.
+
+**Media is the SFU's job.** The platform port is `SfuClient` — connect(url, token), mute, speaker,
+close — far smaller than `RtcClient` because LiveKit negotiates its own transport. Same non-suspend
+callback style, same bridge: Android binds `LivekitSfuClientFactory` (the `livekit-android` SDK,
+JitPack repo needed for its `audioswitch` dependency); iOS registers `RelaySfuFactory` from
+`RelaySfu.swift` (the `client-sdk-swift` package) through `SharedBridge.registerSfuFactory`.
+`UnavailableSfuClient` is the fallback when Swift never registers.
+
+**Stages:** outgoing `STARTING → CONNECTING → ACTIVE`, incoming `INCOMING → CONNECTING → ACTIVE`,
+both ending in `ENDED`. The initiator is in the call from the first moment — while invitees still
+ring, the session is `ACTIVE` with the roster showing who has not answered. Accept = REST join, so
+a push-woken answer needs no held-offer dance; the push rings on identifiers and `describe` fills
+the roster.
+
+**Losing the socket does NOT end a group call** — unlike 1:1, media rides LiveKit's own connection
+and every action goes over REST. On reconnect the engine re-`describe`s the call and applies the
+roster, or ends it if the server says it is over. The local ring timer still bounds an unanswered
+ring.
+
+**Busy is mutual but decided in two places.** Locally, each engine refuses while the other is live
+(an incoming `group_invite` while busy is declined with reason `busy`). Authoritatively, the server
+refuses at join with `409` — a ringing invitee is never busy.
+
+**UI:** `CallHost` overlays whichever session is live (direct wins if both, which the gates make
+unreachable). `GroupCallScreen` shows the roster with per-participant state; the entry point is the
+Calls tab's "New group call" → `GroupCallPickerScreen`, a contact multi-select capped at 16
+participants including self.
+
+**Testing:** `GroupCallEngineTest` drives the machine over `FakeSocket` + `FakeGroupCallApi` +
+`FakeSfuClient`: create/join/decline/leave, roster deltas, `group_ended`, busy in both directions,
+ring-out, push-woken describe, terminal describe after reconnect, SFU failure.

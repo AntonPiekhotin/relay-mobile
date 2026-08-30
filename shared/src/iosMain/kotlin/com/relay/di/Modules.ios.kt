@@ -5,8 +5,10 @@ import app.cash.sqldelight.driver.native.NativeSqliteDriver
 import com.relay.auth.IosTokenStore
 import com.relay.auth.TokenStore
 import com.relay.call.BridgedRtcClientFactory
+import com.relay.call.BridgedSfuClientFactory
 import com.relay.call.MicPermission
 import com.relay.call.RtcClientFactory
+import com.relay.call.SfuClientFactory
 import com.relay.config.AppConfig
 import com.relay.db.RelayDb
 import com.relay.push.IosAppLifecycle
@@ -33,6 +35,7 @@ actual val platformModule: Module = module {
     single<AppConfig> { IosDevConfig() }
     single { PushPlatform("ios") }
     single<RtcClientFactory> { BridgedRtcClientFactory() }
+    single<SfuClientFactory> { BridgedSfuClientFactory() }
     single { MicPermission(grantedByPlatform = true) }
     single { IosNotificationPresenter() }
     single { IosAppLifecycle(get(), get(), get(), get(), get(), get()) }

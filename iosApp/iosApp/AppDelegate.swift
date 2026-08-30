@@ -10,6 +10,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) -> Bool {
         SharedBridge.shared.start()
         SharedBridge.shared.registerRtcFactory(factory: RelayRtcFactory())
+        SharedBridge.shared.registerSfuFactory(factory: RelaySfuFactory())
         UNUserNotificationCenter.current().delegate = self
         application.registerForRemoteNotifications()
         return true

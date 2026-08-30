@@ -73,6 +73,34 @@ data class CallUiState(
     val failure: String? = null
 )
 
+data class GroupCallParticipantUi(
+    val userId: String,
+    val name: String,
+    val stateLabel: String,
+    val isJoined: Boolean
+)
+
+data class GroupCallUiState(
+    val visible: Boolean = false,
+    val title: String = "",
+    val status: String = "",
+    val answeredAt: Long? = null,
+    val actions: CallActionsUi = CallActionsUi.IN_PROGRESS,
+    val participants: List<GroupCallParticipantUi> = emptyList(),
+    val muted: Boolean = false,
+    val speakerOn: Boolean = false,
+    val failure: String? = null
+)
+
+data class GroupCallPickerState(
+    val contacts: List<PersonUi> = emptyList(),
+    val selectedIds: Set<String> = emptySet(),
+    val isStarting: Boolean = false,
+    val error: String? = null
+) {
+    val canStart: Boolean get() = selectedIds.isNotEmpty() && !isStarting
+}
+
 data class DialogListState(
     val dialogs: List<DialogUi> = emptyList(),
     val isLoaded: Boolean = false,

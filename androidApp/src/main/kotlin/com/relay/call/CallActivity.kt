@@ -7,14 +7,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import com.relay.repository.CallRepository
+import com.relay.repository.GroupCallRepository
 import com.relay.ui.call.CallHost
 import com.relay.ui.theme.RelayTheme
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class CallActivity : ComponentActivity() {
 
     private val calls: CallRepository by inject()
+    private val groupCalls: GroupCallRepository by inject()
     private val mic: MicPermission by inject()
     private val notifier by lazy { CallNotifier(applicationContext) }
     private lateinit var micRequests: MicPermissionBinder
@@ -27,7 +30,8 @@ class CallActivity : ComponentActivity() {
         notifier.dismissIncoming()
 
         lifecycleScope.launch {
-            calls.session.collect { session -> if (session == null) finish() }
+            combine(calls.session, groupCalls.session) { direct, group -> direct == null && group == null }
+                .collect { idle -> if (idle) finish() }
         }
 
         setContent {
