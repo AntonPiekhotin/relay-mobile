@@ -26,7 +26,6 @@ import com.relay.ui.home.HomeBottomBar
 import com.relay.ui.home.HomeTab
 import com.relay.ui.home.homeTabTag
 import com.relay.ui.people.ContactsScreen
-import com.relay.ui.people.SearchScreen
 import com.relay.ui.profile.PROFILE_LOGOUT_TAG
 import com.relay.ui.profile.ProfileScreen
 import com.relay.ui.state.MessageStatusUi
@@ -100,6 +99,7 @@ class ScreenUiTest {
             RelayTheme {
                 DialogListScreen(
                     state = DialogListState(isLoaded = true),
+                    onQueryChange = {},
                     onOpenDialog = {}
                 )
             }
@@ -113,6 +113,7 @@ class ScreenUiTest {
             RelayTheme {
                 DialogListScreen(
                     state = DialogListState(isLoaded = false),
+                    onQueryChange = {},
                     onOpenDialog = {}
                 )
             }
@@ -130,6 +131,7 @@ class ScreenUiTest {
                         dialogs = listOf(dialogUi("d1", "Ada", "see you then")),
                         isLoaded = true
                     ),
+                    onQueryChange = {},
                     onOpenDialog = { opened += it }
                 )
             }
@@ -141,10 +143,10 @@ class ScreenUiTest {
     }
 
     @Test
-    fun theSearchTabAsksForAMinimumQueryBeforeSearching() = runComposeUiTest {
+    fun theContactsSearchAsksForAMinimumQueryBeforeSearching() = runComposeUiTest {
         setContent {
             RelayTheme {
-                SearchScreen(
+                ContactsScreen(
                     state = PeopleState(query = "a"),
                     onQueryChange = {},
                     onOpenChat = {},
@@ -153,7 +155,7 @@ class ScreenUiTest {
                 )
             }
         }
-        onNodeWithText("Find someone").assertIsDisplayed()
+        onNodeWithText("Type at least 2 characters to search by name or email.").assertIsDisplayed()
     }
 
     @Test
@@ -169,6 +171,7 @@ class ScreenUiTest {
                             personUi("b", "Grace Hopper", isContact = false)
                         )
                     ),
+                    onQueryChange = {},
                     onOpenChat = {},
                     onAddContact = { added += it },
                     onRemoveContact = { removed += it }
@@ -187,7 +190,7 @@ class ScreenUiTest {
         val opened = mutableListOf<String>()
         setContent {
             RelayTheme {
-                SearchScreen(
+                ContactsScreen(
                     state = PeopleState(
                         query = "ada",
                         hasSearched = true,
@@ -425,6 +428,7 @@ class ScreenUiTest {
             RelayTheme {
                 ContactsScreen(
                     state = PeopleState(),
+                    onQueryChange = {},
                     onOpenChat = {},
                     onAddContact = {},
                     onRemoveContact = {}
@@ -450,8 +454,7 @@ class ScreenUiTest {
                     ),
                     onOpenDialog = { opened += it },
                     onCallBack = { calledBack += it.id },
-                    onRetry = {},
-                    onNewGroupCall = {}
+                    onRetry = {}
                 )
             }
         }
@@ -472,8 +475,7 @@ class ScreenUiTest {
                     state = CallsState(isLoaded = true, error = "Cannot reach the server"),
                     onOpenDialog = {},
                     onCallBack = {},
-                    onRetry = { retried += Unit },
-                    onNewGroupCall = {}
+                    onRetry = { retried += Unit }
                 )
             }
         }
@@ -491,8 +493,7 @@ class ScreenUiTest {
                     state = CallsState(isLoaded = true),
                     onOpenDialog = {},
                     onCallBack = {},
-                    onRetry = {},
-                    onNewGroupCall = {}
+                    onRetry = {}
                 )
             }
         }

@@ -103,6 +103,8 @@ data class GroupCallPickerState(
 
 data class DialogListState(
     val dialogs: List<DialogUi> = emptyList(),
+    val query: String = "",
+    val unreadTotal: Long = 0,
     val isLoaded: Boolean = false,
     val connection: ConnectionUi = ConnectionUi.Unknown
 )

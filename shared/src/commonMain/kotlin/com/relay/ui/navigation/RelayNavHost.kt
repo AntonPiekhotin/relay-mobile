@@ -12,8 +12,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.relay.push.PushNavigator
-import com.relay.ui.call.GroupCallPickerScreen
-import com.relay.ui.call.GroupCallPickerViewModel
 import com.relay.ui.chat.ChatScreen
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.components.SwipeBackBox
@@ -40,26 +38,8 @@ fun RelayNavHost(
         composable<Route.Home> { entry ->
             HomeScreen(
                 onOpenDialog = { entry.ifResumed { navController.navigate(Route.Chat(it)) } },
-                onNewGroupCall = { entry.ifResumed { navController.navigate(Route.GroupCallPicker) } },
                 onLogout = onLogout
             )
-        }
-
-        composable<Route.GroupCallPicker> { entry ->
-            val viewModel = koinViewModel<GroupCallPickerViewModel>()
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            val back = { entry.ifResumed { navController.popBackStack() } }
-            LaunchedEffect(viewModel) {
-                viewModel.started.collect { navController.popBackStack() }
-            }
-            SwipeBackBox(onBack = back) {
-                GroupCallPickerScreen(
-                    state = state,
-                    onToggle = viewModel::toggle,
-                    onStart = viewModel::start,
-                    onBack = back
-                )
-            }
         }
 
         composable<Route.Chat> { entry ->

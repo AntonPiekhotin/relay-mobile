@@ -139,24 +139,33 @@ sealed interface Route {
 ```
 
 **`Home` is the only top-level route.** It is a Telegram-style shell: a bottom dock
-(`HomeBottomBar`, five `NavigationBarItem`s) switching between the Contacts, Calls, Chats, Search,
-and Settings pages. The dock is plain state inside `HomeScreen` (`rememberSaveable` + a
-`SaveableStateHolder` so each page keeps its scroll and field state) — tabs are **not** nav routes,
-so system back never walks through them and a pushed `Chat` hides the dock. Chats is the start tab
-and carries the total-unread badge. Each page owns its own `Scaffold`/`TopAppBar`; the shell applies
-`consumeWindowInsets` so the dock's insets are not double-counted.
+(`HomeBottomBar`, five `NavigationBarItem`s) switching between the Chats, Groups, Calls, Contacts,
+and Settings pages. **The first four and their order mirror the web client's dock** (`AppLayout.tsx`)
+so the two clients read the same; Settings is the mobile-only fifth, kept at the right edge. There is
+no Search tab — searching happens in a `SearchField` at the **top** of the page that owns it. The dock
+is plain state inside `HomeScreen` (`rememberSaveable` + a `SaveableStateHolder` so each page keeps
+its scroll and field state) — tabs are **not** nav routes, so system back never walks through them
+and a pushed `Chat` hides the dock. Chats is the start tab and carries the total-unread badge
+(`DialogListState.unreadTotal`, computed before the search filter so filtering never changes it).
+Each page owns its own `Scaffold`/`TopAppBar`; the shell applies `consumeWindowInsets` so the dock's
+insets are not double-counted.
 
 **The call screen is not a route.** `CallHost` renders above the whole `NavHost` whenever a call
 session exists, so ringing does not disturb the back stack and the user returns to exactly where
 they were when the call ends. On Android a `CallActivity` hosts the same composable for the
 lock-screen case. See `docs/CALLS.md`.
 
-The dock pages: **Contacts** and **Search** share one `PeopleViewModel` (adding a contact from
-search updates both). **Calls** reads `GET /api/v1/call/calls` through `CallsViewModel` — the one
-sanctioned REST-into-state screen, because calls deliberately have no local table (see
-`docs/CALLS.md` §1); rows open the dialog's chat, the trailing phone glyph calls back. **Settings**
-is the read-only profile: name, email, member-since, and the logout button. **Log out lives there,
-nowhere else.**
+The dock pages: **Chats** filters the loaded dialogs by title from its own search field — a filter
+over what the DB already gave us, not a query, because there is no dialog-search endpoint; the
+filtering lives in `DialogListViewModel`, not the composable. **Contacts** carries the people search
+in the same position: below `MIN_SEARCH_LENGTH` characters it lists the contacts, above it the search
+hits, both through one `PeopleViewModel` so adding a contact from a hit updates both lists.
+**Groups** is the group-call entry — `GroupCallPickerScreen` embedded in the tab (`onBack = null`
+drops the back arrow); the web's Groups page creates group *dialogs*, which this client does not have
+yet. **Calls** reads `GET /api/v1/call/calls` through `CallsViewModel` — the one sanctioned
+REST-into-state screen, because calls deliberately have no local table (see `docs/CALLS.md` §1);
+rows open the dialog's chat, the trailing phone glyph calls back. **Settings** is the read-only
+profile: name, email, member-since, and the logout button. **Log out lives there, nowhere else.**
 
 **Going back.** Every screen pushed above `Home` gets a `BackButton` (arrow glyph) *and* is wrapped
 in `SwipeBackBox` in the nav host, which drags the screen with a swipe that starts within 24 dp of
@@ -232,11 +241,13 @@ Build these as standalone, previewable composables:
 | `Composer` | Pill text field and a filled icon send button, in the chat's `bottomBar` |
 | `DialogRow` | Avatar, title, last message, unread badge, timestamp |
 | `DialogList` | `LazyColumn` of `DialogRow` |
-| `HomeBottomBar` | The dock: five `NavigationBarItem`s with glyph icons; unread badge on Chats |
+| `HomeBottomBar` | The dock: Chats · Groups · Calls · Contacts · Settings, glyph icons, unread badge on Chats |
+| `SearchField` | Pill outlined field with a leading search glyph and a clear button; the top of Chats and Contacts |
 | `CallLogRow` | Avatar, peer (error-coloured when missed), direction · duration, timestamp, call-back glyph |
 | `Avatar` | Initials in a circle; `size` and `textStyle` are parameters |
-| `SearchGlyph` / `AccountGlyph` / `BackGlyph` / `ChatGlyph` / `SettingsGlyph` | App-bar and dock icons, drawn on a `Canvas` — Material icon artifacts are not on the classpath |
-| `PhoneGlyph` / `MicrophoneGlyph` / `SpeakerGlyph` | Call controls, same `Canvas` approach; `PhoneGlyph` rotates 135° for decline and hang-up |
+| `RelayIcons` | The icon set: `ImageVector`s built by `PathParser` from the **web client's own SVG path data** (`relay/public/icons/*.svg`), 24×24 viewport, 1.8 stroke, round caps and joins. Material icon artifacts are not on the classpath. Keep the path strings identical to the web files so the two clients cannot drift; `Back`, `Speaker` and `Settings` have no web counterpart and are drawn in the same stroke language |
+| `SearchGlyph` / `AccountGlyph` / `GroupGlyph` / `BackGlyph` / `ChatGlyph` / `SettingsGlyph` / `CloseGlyph` | Thin `Icon` wrappers over `RelayIcons`, taking `contentDescription` and `tint` |
+| `PhoneGlyph` / `MicrophoneGlyph` / `SpeakerGlyph` | Call controls over the same set; `PhoneGlyph` rotates 135° (`DECLINE_ROTATION`) for decline and hang-up, and the muted / speaker-off states swap the vector rather than overdrawing a slash |
 | `CallScreen` | Full-screen call overlay: peer, status or talk timer, and the actions for the current stage |
 | `BackButton` | `IconButton` + `BackGlyph`, used as every sub-screen's `navigationIcon` |
 | `PersonRow` | Avatar and name only; the row itself opens the chat, the trailing button only adds or removes the contact |
@@ -264,3 +275,6 @@ Each takes plain data and lambdas — no ViewModel, no DI, no side effects. That
 - [ ] Very long messages and unbroken strings wrap without breaking layout
 - [ ] An incoming call overlays whatever screen is open and restores it on hang-up
 - [ ] The talk timer ticks without recomposing the rest of the call screen
+- [ ] Every dock icon renders as a stroked glyph, not a filled blob, in light and dark
+- [ ] The Chats search filters the list and its "No matches" state replaces "No conversations"
+- [ ] Clearing the Chats or Contacts search restores the full list and the unread badge is unchanged

@@ -10,20 +10,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.relay.ui.components.AccountGlyph
 import com.relay.ui.components.ChatGlyph
+import com.relay.ui.components.GroupGlyph
 import com.relay.ui.components.PhoneGlyph
-import com.relay.ui.components.SearchGlyph
 import com.relay.ui.components.SettingsGlyph
 
-enum class HomeTab { CONTACTS, CALLS, CHATS, SEARCH, SETTINGS }
+enum class HomeTab { CHATS, GROUPS, CALLS, CONTACTS, SETTINGS }
 
 fun homeTabTag(tab: HomeTab): String = "home-tab-${tab.name.lowercase()}"
 
 private val HomeTab.label: String
     get() = when (this) {
-        HomeTab.CONTACTS -> "Contacts"
-        HomeTab.CALLS -> "Calls"
         HomeTab.CHATS -> "Chats"
-        HomeTab.SEARCH -> "Search"
+        HomeTab.GROUPS -> "Groups"
+        HomeTab.CALLS -> "Calls"
+        HomeTab.CONTACTS -> "Contacts"
         HomeTab.SETTINGS -> "Settings"
     }
 
@@ -50,10 +50,10 @@ fun HomeBottomBar(
 @Composable
 private fun HomeTabIcon(tab: HomeTab, chatsBadge: Long) {
     when (tab) {
-        HomeTab.CONTACTS -> AccountGlyph(contentDescription = tab.label)
-        HomeTab.CALLS -> PhoneGlyph(contentDescription = tab.label)
         HomeTab.CHATS -> ChatsIcon(badge = chatsBadge)
-        HomeTab.SEARCH -> SearchGlyph(contentDescription = tab.label)
+        HomeTab.GROUPS -> GroupGlyph(contentDescription = tab.label)
+        HomeTab.CALLS -> PhoneGlyph(contentDescription = tab.label)
+        HomeTab.CONTACTS -> AccountGlyph(contentDescription = tab.label)
         HomeTab.SETTINGS -> SettingsGlyph(contentDescription = tab.label)
     }
 }

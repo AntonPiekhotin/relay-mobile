@@ -36,15 +36,15 @@ fun GroupCallPickerScreen(
     state: GroupCallPickerState,
     onToggle: (String) -> Unit,
     onStart: () -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("New group call") },
-                navigationIcon = { BackButton(onBack = onBack) }
+                title = { Text("Groups") },
+                navigationIcon = { if (onBack != null) BackButton(onBack = onBack) }
             )
         },
         bottomBar = {
@@ -67,22 +67,28 @@ fun GroupCallPickerScreen(
             }
         }
     ) { padding ->
-        if (state.contacts.isEmpty()) {
-            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (state.contacts.isEmpty()) {
                 EmptyState(
                     title = "No contacts yet",
                     detail = "Add contacts to start a group call."
                 )
+                return@Column
             }
-            return@Scaffold
-        }
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            items(items = state.contacts, key = { it.id }) { person ->
-                SelectablePersonRow(
-                    person = person,
-                    selected = person.id in state.selectedIds,
-                    onToggle = onToggle
-                )
+            Text(
+                text = "Pick the people to call together.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(items = state.contacts, key = { it.id }) { person ->
+                    SelectablePersonRow(
+                        person = person,
+                        selected = person.id in state.selectedIds,
+                        onToggle = onToggle
+                    )
+                }
             }
         }
     }

@@ -107,7 +107,7 @@ Build order — do not skip ahead, each phase depends on the previous:
       `docs/CALLS.md` before touching any of it.
 - [x] **7. Group calls** — audio, REST-driven control (`GroupCallEngine` beside `CallEngine`),
       media through the LiveKit SFU via the `SfuClient` platform port (livekit-android /
-      client-sdk-swift). Entry: contact picker on the Calls tab. Same foreground-only caveats as
+      client-sdk-swift). Entry: the Groups tab in the dock. Same foreground-only caveats as
       phase 6. See `docs/CALLS.md` §8 and `docs/PROTOCOL.md` §4.5.
 
 ## Backend reality check

@@ -9,7 +9,4 @@ sealed interface Route {
 
     @Serializable
     data class Chat(val dialogId: String) : Route
-
-    @Serializable
-    data object GroupCallPicker : Route
 }

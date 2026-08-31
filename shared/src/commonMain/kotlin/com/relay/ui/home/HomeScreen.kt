@@ -14,13 +14,14 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.relay.ui.call.GroupCallPickerScreen
+import com.relay.ui.call.GroupCallPickerViewModel
 import com.relay.ui.calls.CallsScreen
 import com.relay.ui.calls.CallsViewModel
 import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.dialogs.DialogListViewModel
 import com.relay.ui.people.ContactsScreen
 import com.relay.ui.people.PeopleViewModel
-import com.relay.ui.people.SearchScreen
 import com.relay.ui.profile.ProfileScreen
 import com.relay.ui.profile.ProfileViewModel
 import org.koin.compose.viewmodel.koinViewModel
@@ -28,7 +29,6 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun HomeScreen(
     onOpenDialog: (String) -> Unit,
-    onNewGroupCall: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -43,7 +43,7 @@ fun HomeScreen(
         bottomBar = {
             HomeBottomBar(
                 selected = tab,
-                chatsBadge = dialogsState.dialogs.sumOf { it.unreadCount },
+                chatsBadge = dialogsState.unreadTotal,
                 onSelect = { tabName = it.name }
             )
         }
@@ -51,10 +51,14 @@ fun HomeScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             pageStateHolder.SaveableStateProvider(tabName) {
                 when (tab) {
+                    HomeTab.CHATS -> DialogListScreen(
+                        state = dialogsState,
+                        onQueryChange = dialogsViewModel::onQueryChange,
+                        onOpenDialog = onOpenDialog
+                    )
+                    HomeTab.GROUPS -> GroupsTab()
+                    HomeTab.CALLS -> CallsTab(onOpenDialog = onOpenDialog)
                     HomeTab.CONTACTS -> ContactsTab(onOpenDialog = onOpenDialog)
-                    HomeTab.CALLS -> CallsTab(onOpenDialog = onOpenDialog, onNewGroupCall = onNewGroupCall)
-                    HomeTab.CHATS -> DialogListScreen(state = dialogsState, onOpenDialog = onOpenDialog)
-                    HomeTab.SEARCH -> SearchTab(onOpenDialog = onOpenDialog)
                     HomeTab.SETTINGS -> SettingsTab(onLogout = onLogout)
                 }
             }
@@ -71,21 +75,6 @@ private fun ContactsTab(onOpenDialog: (String) -> Unit) {
     }
     ContactsScreen(
         state = state,
-        onOpenChat = viewModel::openChat,
-        onAddContact = viewModel::addContact,
-        onRemoveContact = viewModel::removeContact
-    )
-}
-
-@Composable
-private fun SearchTab(onOpenDialog: (String) -> Unit) {
-    val viewModel = koinViewModel<PeopleViewModel>()
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(viewModel) {
-        viewModel.openedDialog.collect { onOpenDialog(it) }
-    }
-    SearchScreen(
-        state = state,
         onQueryChange = viewModel::onQueryChange,
         onOpenChat = viewModel::openChat,
         onAddContact = viewModel::addContact,
@@ -94,15 +83,25 @@ private fun SearchTab(onOpenDialog: (String) -> Unit) {
 }
 
 @Composable
-private fun CallsTab(onOpenDialog: (String) -> Unit, onNewGroupCall: () -> Unit) {
+private fun GroupsTab() {
+    val viewModel = koinViewModel<GroupCallPickerViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    GroupCallPickerScreen(
+        state = state,
+        onToggle = viewModel::toggle,
+        onStart = viewModel::start
+    )
+}
+
+@Composable
+private fun CallsTab(onOpenDialog: (String) -> Unit) {
     val viewModel = koinViewModel<CallsViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     CallsScreen(
         state = state,
         onOpenDialog = onOpenDialog,
         onCallBack = viewModel::callBack,
-        onRetry = viewModel::refresh,
-        onNewGroupCall = onNewGroupCall
+        onRetry = viewModel::refresh
     )
 }
 

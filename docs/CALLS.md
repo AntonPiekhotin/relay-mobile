@@ -241,8 +241,8 @@ refuses at join with `409` — a ringing invitee is never busy.
 
 **UI:** `CallHost` overlays whichever session is live (direct wins if both, which the gates make
 unreachable). `GroupCallScreen` shows the roster with per-participant state; the entry point is the
-Calls tab's "New group call" → `GroupCallPickerScreen`, a contact multi-select capped at 16
-participants including self.
+dock's **Groups** tab, which is `GroupCallPickerScreen` embedded (no back arrow): a contact
+multi-select capped at 16 participants including self.
 
 **Testing:** `GroupCallEngineTest` drives the machine over `FakeSocket` + `FakeGroupCallApi` +
 `FakeSfuClient`: create/join/decline/leave, roster deltas, `group_ended`, busy in both directions,

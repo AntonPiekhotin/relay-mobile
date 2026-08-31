@@ -8,6 +8,7 @@ import com.relay.protocol.nowEpochMillis
 import com.relay.repository.ConnectionStatus
 import com.relay.repository.MessageRepository
 import com.relay.ui.state.DialogListState
+import com.relay.ui.state.DialogUi
 import com.relay.ui.state.toConnectionUi
 import com.relay.ui.state.toDialogUi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,6 +32,8 @@ class DialogListViewModel(
     private val mutableState = MutableStateFlow(DialogListState())
     val state: StateFlow<DialogListState> = mutableState.asStateFlow()
 
+    private val query = MutableStateFlow("")
+
     init {
         viewModelScope.launch {
             session.state
@@ -39,10 +42,14 @@ class DialogListViewModel(
                 .flatMapLatest { selfId ->
                     combine(
                         dialogs.observeDialogSummaries(selfId),
-                        connection.phase
-                    ) { rows, phase ->
+                        connection.phase,
+                        query
+                    ) { rows, phase, term ->
+                        val all = rows.toDialogUi(selfId, now())
                         DialogListState(
-                            dialogs = rows.toDialogUi(selfId, now()),
+                            dialogs = all.matching(term),
+                            query = term,
+                            unreadTotal = all.sumOf { it.unreadCount },
                             isLoaded = true,
                             connection = phase.toConnectionUi()
                         )
@@ -51,4 +58,14 @@ class DialogListViewModel(
                 .collect { built -> mutableState.value = built }
         }
     }
+
+    fun onQueryChange(term: String) {
+        query.value = term
+    }
+}
+
+private fun List<DialogUi>.matching(term: String): List<DialogUi> {
+    val trimmed = term.trim()
+    if (trimmed.isEmpty()) return this
+    return filter { it.title.contains(trimmed, ignoreCase = true) }
 }
