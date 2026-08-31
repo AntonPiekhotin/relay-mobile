@@ -5,6 +5,7 @@ import com.relay.model.MessageKind
 import com.relay.model.MessageState
 import com.relay.network.MessageApiResult
 import com.relay.network.WireDialog
+import com.relay.network.WireReadStateEntry
 import com.relay.protocol.ErrorCode
 import com.relay.protocol.FrameType
 import com.relay.protocol.isoToEpochMillis
@@ -33,6 +34,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+
+private const val EARLIER_ISO = "2026-07-26T09:00:00Z"
 
 @OptIn(ExperimentalCoroutinesApi::class)
 private class EngineHarness(scope: TestScope) {
@@ -237,6 +240,152 @@ class SyncEngineTest {
         runCurrent()
         assertEquals(4L, harness.store.countAllMessages())
         assertEquals("m4", harness.store.syncState("d1")?.newestSyncedId)
+    }
+
+    @Test
+    fun catchUpHydratesReadCursorsFromTheReadStateSnapshot() = runTest {
+        val harness = EngineHarness(this)
+        harness.api.dialogsHandler = {
+            MessageApiResult.Success(
+                listOf(WireDialog("d1", "direct", participantIds = listOf("me", "peer")))
+            )
+        }
+        harness.api.beforeHandler = { _, before, _ ->
+            if (before == null) {
+                MessageApiResult.Success(
+                    listOf(wireMessage("m2"), wireMessage("m1", createdAt = EARLIER_ISO))
+                )
+            } else {
+                MessageApiResult.Success(emptyList())
+            }
+        }
+        harness.api.readStateHandler = {
+            MessageApiResult.Success(
+                listOf(
+                    WireReadStateEntry("me", "m2", TEST_ISO),
+                    WireReadStateEntry("peer", "m2", TEST_ISO)
+                )
+            )
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        val summary = harness.store.observeDialogSummaries("me").first().single()
+        assertEquals(0L, summary.unreadCount)
+        assertEquals(isoToEpochMillis(TEST_ISO), summary.peerReadAt)
+    }
+
+    @Test
+    fun readCursorsApplyBeforeTheMessageBackfill() = runTest {
+        val harness = EngineHarness(this)
+        val calls = mutableListOf<String>()
+        harness.api.dialogsHandler = {
+            MessageApiResult.Success(
+                listOf(WireDialog("d1", "direct", participantIds = listOf("me", "peer")))
+            )
+        }
+        harness.api.readStateHandler = {
+            calls += "read-state"
+            MessageApiResult.Success(listOf(WireReadStateEntry("me", "m1", TEST_ISO)))
+        }
+        harness.api.beforeHandler = { _, _, _ ->
+            calls += "messages"
+            MessageApiResult.Success(listOf(wireMessage("m1")))
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        assertEquals(listOf("read-state", "messages"), calls)
+        assertEquals(0L, harness.store.observeDialogSummaries("me").first().single().unreadCount)
+    }
+
+    @Test
+    fun aReadStateEntryWithAnUnparseableTimestampIsSkipped() = runTest {
+        val harness = EngineHarness(this)
+        harness.api.dialogsHandler = {
+            MessageApiResult.Success(
+                listOf(WireDialog("d1", "direct", participantIds = listOf("me", "peer")))
+            )
+        }
+        harness.api.beforeHandler = { _, before, _ ->
+            if (before == null) {
+                MessageApiResult.Success(listOf(wireMessage("m1")))
+            } else {
+                MessageApiResult.Success(emptyList())
+            }
+        }
+        harness.api.readStateHandler = {
+            MessageApiResult.Success(
+                listOf(
+                    WireReadStateEntry("me", "m1", "not-a-timestamp"),
+                    WireReadStateEntry("peer", "m1", "not-a-timestamp")
+                )
+            )
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        val summary = harness.store.observeDialogSummaries("me").first().single()
+        assertEquals(1L, summary.unreadCount)
+        assertNull(summary.peerReadAt)
+    }
+
+    @Test
+    fun anUnavailableReadStateSnapshotIsRetriedUntilItApplies() = runTest {
+        val harness = EngineHarness(this)
+        harness.api.dialogsHandler = {
+            MessageApiResult.Success(
+                listOf(WireDialog("d1", "direct", participantIds = listOf("me", "peer")))
+            )
+        }
+        harness.api.beforeHandler = { _, before, _ ->
+            if (before == null) {
+                MessageApiResult.Success(listOf(wireMessage("m1")))
+            } else {
+                MessageApiResult.Success(emptyList())
+            }
+        }
+        harness.api.readStateHandler = {
+            if (harness.api.readStateCalls == 1) {
+                MessageApiResult.Unavailable("HTTP 503")
+            } else {
+                MessageApiResult.Success(listOf(WireReadStateEntry("me", "m1", TEST_ISO)))
+            }
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        assertEquals(1L, harness.store.observeDialogSummaries("me").first().single().unreadCount)
+        advanceTimeBy(120_000)
+        assertEquals(0L, harness.store.observeDialogSummaries("me").first().single().unreadCount)
+        assertEquals(2, harness.api.readStateCalls)
+        harness.socket.disconnect()
+        runCurrent()
+    }
+
+    @Test
+    fun aStaleServerReadCursorDoesNotRegressALocalRead() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.applyRemoteMessage(
+            "m1", null, "d1", "peer", "old", isoToEpochMillis(EARLIER_ISO), selfId = "me"
+        )
+        harness.store.applyRemoteMessage(
+            "m2", null, "d1", "peer", "new", isoToEpochMillis(TEST_ISO), selfId = "me"
+        )
+        harness.store.markSelfRead("d1", "m2", isoToEpochMillis(TEST_ISO))
+        harness.store.updateNewestSynced("d1", "m2")
+        harness.api.readStateHandler = {
+            MessageApiResult.Success(listOf(WireReadStateEntry("me", "m1", EARLIER_ISO)))
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        assertEquals(0L, harness.store.observeDialogSummaries("me").first().single().unreadCount)
     }
 
     @Test

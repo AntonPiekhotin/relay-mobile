@@ -209,12 +209,34 @@ class SyncEngine(
 
     private suspend fun catchUpDialog(dialogId: String): Boolean {
         store.ensureSyncState(dialogId)
+        val readStateComplete = hydrateReadState(dialogId)
         val cursor = store.syncState(dialogId)?.newestSyncedId
-        return if (cursor == null) {
+        val messagesComplete = if (cursor == null) {
             loadInitialPage(dialogId)
         } else {
             pageForward(dialogId, cursor)
         }
+        return readStateComplete && messagesComplete
+    }
+
+    private suspend fun hydrateReadState(dialogId: String): Boolean {
+        val entries = when (val result = api.readState(dialogId)) {
+            is MessageApiResult.Success -> result.value
+            is MessageApiResult.Rejected -> return true
+            is MessageApiResult.Unavailable -> return false
+        }
+        val selfId = selfId()
+        for (entry in entries) {
+            val readAt = isoToEpochMillisOrNull(entry.lastReadAt) ?: continue
+            store.applyReadReceipt(
+                dialogId = dialogId,
+                userId = entry.userId,
+                upToMessageId = entry.lastReadMessageId,
+                readAt = readAt,
+                selfId = selfId
+            )
+        }
+        return true
     }
 
     private suspend fun loadInitialPage(dialogId: String): Boolean {

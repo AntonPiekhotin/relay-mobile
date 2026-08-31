@@ -20,6 +20,7 @@ import com.relay.network.SocketClient
 import com.relay.network.TokenResponse
 import com.relay.network.WireDialog
 import com.relay.network.WireMessage
+import com.relay.network.WireReadStateEntry
 import com.relay.protocol.AckPayload
 import com.relay.protocol.DialogDeletedPayload
 import com.relay.protocol.Envelope
@@ -79,6 +80,9 @@ class FakeMessageApi : MessageApi {
         { _, _, _ -> MessageApiResult.Success(emptyList()) }
     var beforeHandler: suspend (String, String?, Int) -> MessageApiResult<List<WireMessage>> =
         { _, _, _ -> MessageApiResult.Success(emptyList()) }
+    var readStateHandler: suspend (String) -> MessageApiResult<List<WireReadStateEntry>> =
+        { MessageApiResult.Success(emptyList()) }
+
     var fallbackHandler: suspend (String, String, String) -> MessageApiResult<FallbackSendResponse> =
         { _, _, _ -> MessageApiResult.Unavailable("rest not reachable") }
 
@@ -101,6 +105,7 @@ class FakeMessageApi : MessageApi {
     var dialogsCalls = 0
     var afterCalls = 0
     var beforeCalls = 0
+    var readStateCalls = 0
     var fallbackCalls = 0
 
     override suspend fun openDirectDialog(peerId: String): MessageApiResult<OpenedDialogResponse> {
@@ -142,6 +147,11 @@ class FakeMessageApi : MessageApi {
     ): MessageApiResult<List<WireMessage>> {
         beforeCalls++
         return beforeHandler(dialogId, before, limit)
+    }
+
+    override suspend fun readState(dialogId: String): MessageApiResult<List<WireReadStateEntry>> {
+        readStateCalls++
+        return readStateHandler(dialogId)
     }
 
     override suspend fun sendFallback(

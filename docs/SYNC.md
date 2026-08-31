@@ -162,6 +162,15 @@ back to *now*, and a now-shaped cursor would mark the whole dialog read.
 **Unread counts are derived, never counted up.** `selectAllWithPreview` counts messages from others
 past `self_read_at`. The `unread_count` column predates the cursor and is dead; nothing writes it.
 
+**Catch-up hydrates the cursors.** Frames missed while offline are gone — the server buffers nothing —
+so `SyncEngine.catchUpDialog` starts by fetching `GET /dialogs/{id}/read-state` (every member's cursor)
+and applying each entry through `applyReadReceipt`, the same monotonic path inbound frames take.
+Cursors apply **before** the message backfill: the UI renders every intermediate DB state, so messages
+inserted ahead of the cursor would flash as unread until the snapshot landed. This
+is what rebuilds `self_read_at` after logout wiped the DB — without it, every backfilled message from
+others rendered unread after a relogin — and what recovers a read taken on another device while this
+one was offline. A failed fetch marks the catch-up incomplete so it retries; a rejected one is skipped.
+
 ---
 
 ## 4. Sending
@@ -318,6 +327,9 @@ suspend fun catchUp() {
 - **Deduplicate on `messageId`** — overlap with already-held messages is expected.
 - If `newestSyncedId` is null (fresh install), load the most recent page instead of the whole history.
 - Catch-up must be **idempotent and interruptible**. It runs on every reconnect, which on iOS is every foreground.
+- Each dialog's catch-up starts by fetching `GET /dialogs/{id}/read-state` and applying every entry
+  through the receipt path — see §3.1. Cursors before messages: backfilled rows then insert as
+  already-read instead of flashing an unread badge until the snapshot lands.
 
 **Catch-up does not need the socket.** It is REST only, which is what lets a push drive it:
 `SyncEngine.wakeAndCatchUp(dialogId)` runs the same code for one dialog with no connection at all
@@ -383,3 +395,6 @@ Every one of these has a corresponding bug that ships without it:
 - [ ] Read receipt naming an older position → cursor unchanged, ticks unchanged
 - [ ] Read taken offline → one frame on reconnect, not one per message
 - [ ] Receipt with our own `user_id` → unread badge clears, ticks unchanged
+- [ ] Relogin (DB wiped) → read-state snapshot restores cursors, backfilled messages not unread
+- [ ] Read on another device while offline → badge clears on next catch-up
+- [ ] Read-state entry older than the local cursor → nothing regresses

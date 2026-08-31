@@ -560,8 +560,12 @@ direct path cannot be found, and never through any service, queue, or database. 
 > `POST /internal/api/v1/messages` remains `/internal`-only, so the socket is still the only way a
 > client sends. A backgrounded or mid-reconnect client has to queue locally and flush on reconnect.
 >
-> **Read state is implemented but lives in §4.1, not here** — it is a pair of `message.read` frames
-> plus `unreadCount` on the dialog list, with no REST endpoint of its own.
+> **Read state lives in §4.1 plus one snapshot endpoint** — the live path is the pair of
+> `message.read` frames, and `GET /api/v1/message/dialogs/{id}/read-state` returns every member's
+> cursor (`{ entries: [{ userId, lastReadMessageId, lastReadAt }] }`; a member who has never read is
+> absent). The snapshot is the state a client starts from — it is how `self_read_at` and
+> `peer_read_at` survive a reinstall or relogin, and how reads taken on another device while this
+> one was offline are recovered, since missed frames are never replayed.
 
 All routed through the api-gateway as `/api/v1/{service}/**` — the same convention every existing
 service already follows — and all requiring `Authorization: Bearer`. The message endpoints therefore
@@ -573,6 +577,7 @@ live under `/api/v1/message/**`.
 | `GET` | `/api/v1/message/dialogs/{id}` | Dialog metadata and participants | **Implemented** |
 | `GET` | `/api/v1/message/dialogs/{id}/messages?before=<cursor>&limit=50` | History, newest-first | **Implemented** |
 | `GET` | `/api/v1/message/dialogs/{id}/messages?after=<cursor>&limit=100` | Catch-up after reconnect | **Implemented** |
+| `GET` | `/api/v1/message/dialogs/{id}/read-state` | Every member's read cursor in one dialog | **Implemented** |
 | `POST` | `/api/v1/message/dialogs` | Open the direct dialog with one other user | **Implemented** |
 | `POST` | `/api/v1/message/dialogs/group` | Create a group dialog (§5.6) | **Implemented** |
 | `PUT` | `/api/v1/message/dialogs/{id}/title` | Rename a group (owner only) | **Implemented** |
@@ -1015,7 +1020,10 @@ The socket **will** drop — tunnels, backgrounding, network switches. Recovery 
    unread counts.
 4. For each dialog with local state, call
    `GET /api/v1/message/dialogs/{id}/messages?after=<lastKnownServerId>`, paging until a page comes
-   back short. Merge results, deduplicating on `messageId`.
+   back short. Merge results, deduplicating on `messageId`. Then fetch
+   `GET /api/v1/message/dialogs/{id}/read-state` and apply each entry like an inbound `message.read`
+   frame — receipts that fired while you were away were not buffered either, and this is also what
+   rebuilds `self_read_at` after a relogin wiped the local DB.
 5. Flush the outbox — resend anything still `PENDING`, and resend `message.read` for any read taken
    while offline.
 6. Re-send `presence.subscribe` for whatever conversation is on screen. Subscriptions belong to the

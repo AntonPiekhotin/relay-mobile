@@ -42,6 +42,18 @@ data class WireDialog(
 )
 
 @Serializable
+data class WireReadStateEntry(
+    val userId: String,
+    val lastReadMessageId: String,
+    val lastReadAt: String
+)
+
+@Serializable
+data class ReadStateResponse(
+    val entries: List<WireReadStateEntry> = emptyList()
+)
+
+@Serializable
 data class MessagePageResponse(
     val messages: List<WireMessage>,
     val nextCursor: String? = null
@@ -110,6 +122,7 @@ interface MessageApi {
     suspend fun dialogs(): MessageApiResult<List<WireDialog>>
     suspend fun messagesAfter(dialogId: String, after: String, limit: Int): MessageApiResult<List<WireMessage>>
     suspend fun messagesBefore(dialogId: String, before: String?, limit: Int): MessageApiResult<List<WireMessage>>
+    suspend fun readState(dialogId: String): MessageApiResult<List<WireReadStateEntry>>
     suspend fun sendFallback(clientMsgId: String, dialogId: String, text: String): MessageApiResult<FallbackSendResponse>
 }
 
@@ -167,6 +180,9 @@ class KtorMessageApi(
             if (before != null) parameter("before", before)
             parameter("limit", limit)
         }.mapValue { it.messages }
+
+    override suspend fun readState(dialogId: String): MessageApiResult<List<WireReadStateEntry>> =
+        get<ReadStateResponse>("$base/dialogs/$dialogId/read-state") { }.mapValue { it.entries }
 
     override suspend fun sendFallback(
         clientMsgId: String,
