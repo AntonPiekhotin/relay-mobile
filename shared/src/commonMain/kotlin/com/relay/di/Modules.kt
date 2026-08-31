@@ -52,11 +52,11 @@ import com.relay.sync.ReadReceipts
 import com.relay.sync.SyncEngine
 import com.relay.ui.SessionViewModel
 import com.relay.ui.call.CallViewModel
-import com.relay.ui.call.GroupCallPickerViewModel
 import com.relay.ui.call.GroupCallViewModel
 import com.relay.ui.calls.CallsViewModel
 import com.relay.ui.chat.ChatViewModel
 import com.relay.ui.dialogs.DialogListViewModel
+import com.relay.ui.groups.GroupCreateViewModel
 import com.relay.ui.people.PeopleViewModel
 import com.relay.ui.profile.ProfileViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -120,11 +120,11 @@ val commonModule = module {
     factory { SessionViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { DialogListViewModel(get(), get(), get()) }
     factory { (dialogId: String) ->
-        ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get(), get())
+        ChatViewModel(dialogId, get(), get(), get(), get(), get(), get(), get(), get(), get(), get())
     }
     factory { CallViewModel(get(), get()) }
     factory { GroupCallViewModel(get(), get()) }
-    factory { GroupCallPickerViewModel(get(), get(), get()) }
+    factory { GroupCreateViewModel(get(), get()) }
     factory { CallsViewModel(get(), get(), get(), get()) }
     factory { PeopleViewModel(get(), get()) }
     factory { ProfileViewModel(get()) }

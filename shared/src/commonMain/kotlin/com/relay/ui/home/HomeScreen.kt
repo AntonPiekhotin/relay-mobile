@@ -14,12 +14,12 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.relay.ui.call.GroupCallPickerScreen
-import com.relay.ui.call.GroupCallPickerViewModel
 import com.relay.ui.calls.CallsScreen
 import com.relay.ui.calls.CallsViewModel
 import com.relay.ui.dialogs.DialogListScreen
 import com.relay.ui.dialogs.DialogListViewModel
+import com.relay.ui.groups.GroupCreateScreen
+import com.relay.ui.groups.GroupCreateViewModel
 import com.relay.ui.people.ContactsScreen
 import com.relay.ui.people.PeopleViewModel
 import com.relay.ui.profile.ProfileScreen
@@ -56,7 +56,7 @@ fun HomeScreen(
                         onQueryChange = dialogsViewModel::onQueryChange,
                         onOpenDialog = onOpenDialog
                     )
-                    HomeTab.GROUPS -> GroupsTab()
+                    HomeTab.GROUPS -> GroupsTab(onOpenDialog = onOpenDialog)
                     HomeTab.CALLS -> CallsTab(onOpenDialog = onOpenDialog)
                     HomeTab.CONTACTS -> ContactsTab(onOpenDialog = onOpenDialog)
                     HomeTab.SETTINGS -> SettingsTab(onLogout = onLogout)
@@ -83,13 +83,18 @@ private fun ContactsTab(onOpenDialog: (String) -> Unit) {
 }
 
 @Composable
-private fun GroupsTab() {
-    val viewModel = koinViewModel<GroupCallPickerViewModel>()
+private fun GroupsTab(onOpenDialog: (String) -> Unit) {
+    val viewModel = koinViewModel<GroupCreateViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    GroupCallPickerScreen(
+    LaunchedEffect(viewModel) {
+        viewModel.created.collect { onOpenDialog(it) }
+    }
+    GroupCreateScreen(
         state = state,
+        onTitleChange = viewModel::onTitleChange,
+        onQueryChange = viewModel::onQueryChange,
         onToggle = viewModel::toggle,
-        onStart = viewModel::start
+        onCreate = viewModel::create
     )
 }
 

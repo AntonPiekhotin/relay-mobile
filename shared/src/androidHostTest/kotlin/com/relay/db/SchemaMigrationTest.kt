@@ -1,6 +1,7 @@
 package com.relay.db
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.relay.model.MessageKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,40 @@ class SchemaMigrationTest {
 
     @Test
     fun schemaVersionMatchesTheNumberOfShippedMigrations() {
-        assertEquals(5L, RelayDb.Schema.version)
+        assertEquals(6L, RelayDb.Schema.version)
+    }
+
+    @Test
+    fun upgradingAPhaseSevenDatabaseAddsTheMessageKindColumns() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        VERSION_1_SCHEMA.forEach { driver.execute(null, it.trimIndent(), 0) }
+        driver.execute(
+            null,
+            """
+            INSERT INTO message(server_id, client_msg_id, dialog_id, sender_id, text, created_at, state)
+            VALUES ('srv-1', NULL, 'd1', 'peer', 'hello', 1, 'SENT')
+            """.trimIndent(),
+            0
+        )
+
+        RelayDb.Schema.migrate(driver, oldVersion = 1, newVersion = RelayDb.Schema.version)
+
+        val store = MessageStore(RelayDb(driver), Dispatchers.Unconfined)
+        assertEquals(MessageKind.USER, store.findByServerId("srv-1")?.kind)
+
+        store.applySystemMessage(
+            serverId = "srv-2",
+            dialogId = "g1",
+            actorId = "actor",
+            kind = MessageKind.MEMBER_ADDED,
+            targetUserId = "newcomer",
+            title = "team",
+            createdAt = 2,
+            selfId = "me"
+        )
+        val system = store.findByServerId("srv-2")
+        assertEquals(MessageKind.MEMBER_ADDED, system?.kind)
+        assertEquals("newcomer", system?.targetUserId)
     }
 
     @Test

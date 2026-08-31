@@ -21,11 +21,13 @@ import com.relay.network.TokenResponse
 import com.relay.network.WireDialog
 import com.relay.network.WireMessage
 import com.relay.protocol.AckPayload
+import com.relay.protocol.DialogDeletedPayload
 import com.relay.protocol.Envelope
 import com.relay.protocol.ErrorPayload
 import com.relay.protocol.InboundFrame
 import com.relay.protocol.MessageNewPayload
 import com.relay.protocol.MessageReadReceiptPayload
+import com.relay.protocol.MessageSystemPayload
 import com.relay.protocol.PresenceStatusWire
 import com.relay.protocol.PresenceUpdatePayload
 import com.relay.protocol.TypingReceiptPayload
@@ -83,8 +85,19 @@ class FakeMessageApi : MessageApi {
     var openDialogHandler: suspend (String) -> MessageApiResult<OpenedDialogResponse> =
         { peerId -> MessageApiResult.Success(OpenedDialogResponse("dialog-for-$peerId", "direct", listOf(peerId), TEST_ISO)) }
 
+    var createGroupHandler: suspend (String, String, List<String>) -> MessageApiResult<WireDialog> =
+        { dialogId, title, memberIds ->
+            MessageApiResult.Success(
+                WireDialog(dialogId = dialogId, type = "group", participantIds = memberIds, title = title)
+            )
+        }
+
+    var dialogHandler: suspend (String) -> MessageApiResult<WireDialog> =
+        { MessageApiResult.Unavailable("no dialog stubbed") }
+
     var openDialogCalls = 0
     var openDialogPeers = mutableListOf<String>()
+    var createGroupCalls = mutableListOf<Triple<String, String, List<String>>>()
     var dialogsCalls = 0
     var afterCalls = 0
     var beforeCalls = 0
@@ -95,6 +108,18 @@ class FakeMessageApi : MessageApi {
         openDialogPeers += peerId
         return openDialogHandler(peerId)
     }
+
+    override suspend fun createGroupDialog(
+        dialogId: String,
+        title: String,
+        memberIds: List<String>
+    ): MessageApiResult<WireDialog> {
+        createGroupCalls += Triple(dialogId, title, memberIds)
+        return createGroupHandler(dialogId, title, memberIds)
+    }
+
+    override suspend fun dialog(dialogId: String): MessageApiResult<WireDialog> =
+        dialogHandler(dialogId)
 
     override suspend fun dialogs(): MessageApiResult<List<WireDialog>> {
         dialogsCalls++
@@ -209,6 +234,22 @@ fun readReceiptFrame(
 
 fun errorFrame(code: String, refId: String?): InboundFrame.Error =
     InboundFrame.Error(ErrorPayload(code = code, message = null, refId = refId))
+
+fun messageSystemFrame(
+    id: String,
+    dialogId: String = "g1",
+    actorId: String = "actor",
+    kind: String = "member_added",
+    targetUserId: String? = null,
+    title: String? = null,
+    createdAt: String = TEST_ISO
+): InboundFrame.MessageSystem =
+    InboundFrame.MessageSystem(
+        MessageSystemPayload(id, dialogId, actorId, kind, targetUserId, title, createdAt)
+    )
+
+fun dialogDeletedFrame(dialogId: String = "g1", actorId: String = "actor"): InboundFrame.DialogDeleted =
+    InboundFrame.DialogDeleted(DialogDeletedPayload(dialogId, actorId))
 
 fun presenceUpdateFrame(
     userId: String = "peer",

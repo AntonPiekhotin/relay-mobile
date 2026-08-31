@@ -137,6 +137,22 @@ class FakeMessageRepository : MessageRepository {
         return openHandler(peer.id)
     }
 
+    var createGroupHandler: suspend (String, String, List<String>) -> OpenDialogResult =
+        { dialogId, _, _ -> OpenDialogResult.Opened(dialogId) }
+    val createdGroups = mutableListOf<Triple<String, String, List<String>>>()
+    var membersHandler: suspend (String) -> List<String>? = { null }
+
+    override suspend fun createGroupDialog(
+        dialogId: String,
+        title: String,
+        memberIds: List<String>
+    ): OpenDialogResult {
+        createdGroups += Triple(dialogId, title, memberIds)
+        return createGroupHandler(dialogId, title, memberIds)
+    }
+
+    override suspend fun dialogMembers(dialogId: String): List<String>? = membersHandler(dialogId)
+
     override fun observeDialogs(): Flow<List<Dialog>> = flowOf(emptyList())
     override fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>> = flowOf(emptyList())
     override fun observeDialog(dialogId: String): Flow<Dialog?> = flowOf(null)

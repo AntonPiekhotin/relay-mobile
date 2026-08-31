@@ -1,6 +1,7 @@
 package com.relay.sync
 
 import com.relay.db.MessageStore
+import com.relay.model.MessageKind
 import com.relay.model.MessageState
 import com.relay.network.MessageApiResult
 import com.relay.network.WireDialog
@@ -11,8 +12,10 @@ import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakeSocket
 import com.relay.testutil.ackFrame
 import com.relay.testutil.createTestDb
+import com.relay.testutil.dialogDeletedFrame
 import com.relay.testutil.errorFrame
 import com.relay.testutil.messageNewFrame
+import com.relay.testutil.messageSystemFrame
 import com.relay.testutil.readReceiptFrame
 import com.relay.testutil.TEST_ISO
 import com.relay.testutil.wireMessage
@@ -342,6 +345,86 @@ class SyncEngineTest {
         runCurrent()
         assertEquals(0L, harness.store.countAllMessages())
         assertEquals(SyncEngineState.Disconnected, harness.engine.state.value)
+    }
+
+    @Test
+    fun catchUpStoresAGroupDialogWithItsTitleAndNoPeer() = runTest {
+        val harness = EngineHarness(this)
+        harness.api.dialogsHandler = {
+            MessageApiResult.Success(
+                listOf(
+                    WireDialog(
+                        dialogId = "g1",
+                        type = "group",
+                        participantIds = listOf("me", "a", "b"),
+                        title = "team"
+                    )
+                )
+            )
+        }
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        val dialog = harness.store.observeDialog("g1").first()
+        assertEquals("group", dialog?.type)
+        assertEquals("team", dialog?.title)
+        assertNull(dialog?.peerId)
+    }
+
+    @Test
+    fun aSystemFrameStoresASystemRowAndUpdatesTheTitle() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.upsertDialog("g1", "group", "old name", null)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.emitFrame(
+            messageSystemFrame(
+                id = "srv-sys-1",
+                kind = MessageKind.GROUP_RENAMED,
+                title = "new name"
+            )
+        )
+        runCurrent()
+        val message = harness.store.observeMessages("g1").first().single()
+        assertEquals(MessageKind.GROUP_RENAMED, message.kind)
+        assertEquals("new name", message.text)
+        assertEquals("new name", harness.store.observeDialog("g1").first()?.title)
+    }
+
+    @Test
+    fun beingRemovedFromAGroupDropsTheDialogLocally() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.upsertDialog("g1", "group", "team", null)
+        harness.store.applyRemoteMessage("srv-1", null, "g1", "a", "hello", 100)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.connect(userId = "me")
+        runCurrent()
+        harness.socket.emitFrame(
+            messageSystemFrame(
+                id = "srv-sys-1",
+                kind = MessageKind.MEMBER_REMOVED,
+                targetUserId = "me"
+            )
+        )
+        runCurrent()
+        assertNull(harness.store.observeDialog("g1").first())
+        assertEquals(0L, harness.store.countAllMessages())
+    }
+
+    @Test
+    fun aDialogDeletedFrameRemovesTheDialogAndItsMessages() = runTest {
+        val harness = EngineHarness(this)
+        harness.store.upsertDialog("g1", "group", "team", null)
+        harness.store.applyRemoteMessage("srv-1", null, "g1", "a", "hello", 100)
+        harness.engine.start()
+        runCurrent()
+        harness.socket.emitFrame(dialogDeletedFrame("g1"))
+        runCurrent()
+        assertNull(harness.store.observeDialog("g1").first())
+        assertEquals(0L, harness.store.countAllMessages())
+        assertNull(harness.store.syncState("g1"))
     }
 
     @Test

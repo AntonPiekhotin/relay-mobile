@@ -1,6 +1,7 @@
 package com.relay.sync
 
 import com.relay.db.MessageStore
+import com.relay.model.DialogType
 import com.relay.network.ConnectionState
 import com.relay.network.MessageApi
 import com.relay.network.MessageApiResult
@@ -10,6 +11,7 @@ import com.relay.protocol.ErrorCode
 import com.relay.protocol.ErrorPayload
 import com.relay.protocol.InboundFrame
 import com.relay.protocol.MessageReadReceiptPayload
+import com.relay.protocol.MessageSystemPayload
 import com.relay.protocol.isoToEpochMillisOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -134,10 +136,26 @@ class SyncEngine(
                 createdAt = isoToEpochMillisOrNull(frame.payload.createdAt)
             )
             is InboundFrame.MessageNew -> store.applyWireMessage(frame.payload.toWireMessage(), selfId())
+            is InboundFrame.MessageSystem -> onSystemMessage(frame.payload)
+            is InboundFrame.DialogDeleted -> store.deleteDialog(frame.payload.dialogId)
             is InboundFrame.MessageRead -> onReadReceipt(frame.payload)
             is InboundFrame.Error -> onError(frame.payload)
             else -> Unit
         }
+    }
+
+    private suspend fun onSystemMessage(payload: MessageSystemPayload) {
+        val createdAt = isoToEpochMillisOrNull(payload.createdAt) ?: return
+        store.applySystemMessage(
+            serverId = payload.messageId,
+            dialogId = payload.dialogId,
+            actorId = payload.actorId,
+            kind = payload.kind,
+            targetUserId = payload.targetUserId,
+            title = payload.title,
+            createdAt = createdAt,
+            selfId = selfId()
+        )
     }
 
     private suspend fun onReadReceipt(payload: MessageReadReceiptPayload) {
@@ -168,12 +186,17 @@ class SyncEngine(
         val selfId = selfId()
         when (val result = api.dialogs()) {
             is MessageApiResult.Success -> result.value.forEach { dialog ->
+                val isGroup = dialog.type == DialogType.GROUP
                 store.upsertDialog(
                     id = dialog.dialogId,
                     type = dialog.type,
-                    title = null,
+                    title = if (isGroup) dialog.title else null,
                     lastMessageAt = dialog.lastMessageAt?.let { isoToEpochMillisOrNull(it) },
-                    peerId = selfId?.let { self -> dialog.participantIds.firstOrNull { it != self } }
+                    peerId = if (isGroup) {
+                        null
+                    } else {
+                        selfId?.let { self -> dialog.participantIds.firstOrNull { it != self } }
+                    }
                 )
             }
             else -> complete = false

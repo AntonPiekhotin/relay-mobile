@@ -39,6 +39,23 @@ data class MessageReadPayload(
 )
 
 @Serializable
+data class MessageSystemPayload(
+    @SerialName("message_id") val messageId: String,
+    @SerialName("dialog_id") val dialogId: String,
+    @SerialName("actor_id") val actorId: String,
+    @SerialName("kind") val kind: String,
+    @SerialName("target_user_id") val targetUserId: String? = null,
+    @SerialName("title") val title: String? = null,
+    @SerialName("created_at") val createdAt: String
+)
+
+@Serializable
+data class DialogDeletedPayload(
+    @SerialName("dialog_id") val dialogId: String,
+    @SerialName("actor_id") val actorId: String
+)
+
+@Serializable
 data class MessageReadReceiptPayload(
     @SerialName("dialog_id") val dialogId: String,
     @SerialName("user_id") val userId: String,

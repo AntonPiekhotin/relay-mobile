@@ -85,7 +85,8 @@ SELECT
     m.text AS last_text,
     m.state AS last_state,
     m.sender_id AS last_sender_id,
-    m.created_at AS last_created_at
+    m.created_at AS last_created_at,
+    m.kind AS last_kind
 FROM dialog d
 LEFT JOIN message m ON m.local_id = (
     SELECT local_id FROM message
@@ -100,6 +101,9 @@ SELECT * FROM dialog WHERE id = :id;
 
 selectIds:
 SELECT id FROM dialog;
+
+deleteById:
+DELETE FROM dialog WHERE id = :id;
 
 deleteAll:
 DELETE FROM dialog;

@@ -5,6 +5,8 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.relay.model.DialogSummary
 import com.relay.model.DialogSyncState
+import com.relay.model.DialogType
+import com.relay.model.MessageKind
 import com.relay.model.MessageState
 import com.relay.model.ReadCursor
 import com.relay.model.UnnamedDialog
@@ -15,7 +17,7 @@ import kotlinx.coroutines.withContext
 import com.relay.model.Dialog as DomainDialog
 import com.relay.model.Message as DomainMessage
 
-private const val DEFAULT_DIALOG_TYPE = "direct"
+private const val DEFAULT_DIALOG_TYPE = DialogType.DIRECT
 private const val DEFAULT_VISIBLE_MESSAGES = 500L
 
 data class ReadPosition(
@@ -106,11 +108,15 @@ class MessageStore(
         senderId: String,
         text: String,
         createdAt: Long,
-        selfId: String? = null
+        selfId: String? = null,
+        kind: String = MessageKind.USER,
+        targetUserId: String? = null
     ): Unit = withContext(dispatcher) {
-        val peerId = senderId.takeIf { selfId != null && it != selfId }
+        val isSystem = MessageKind.isSystem(kind)
+        val peerId = senderId.takeIf { selfId != null && it != selfId && !isSystem }
         db.transaction {
-            db.dialogQueries.insertIfAbsent(dialogId, DEFAULT_DIALOG_TYPE, null, null, peerId)
+            val dialogType = if (isSystem) DialogType.GROUP else DEFAULT_DIALOG_TYPE
+            db.dialogQueries.insertIfAbsent(dialogId, dialogType, null, null, peerId)
             if (peerId != null) db.dialogQueries.fillPeerIfMissing(peerId, dialogId)
             db.sync_stateQueries.insertIfAbsent(dialogId)
             val existing = db.messageQueries.findByServerId(serverId).executeAsOneOrNull()
@@ -121,10 +127,50 @@ class MessageStore(
                 if (pending != null && pending.server_id == null) {
                     db.messageQueries.promote(serverId, createdAt, pending.local_id)
                 } else {
-                    db.messageQueries.insertRemote(serverId, dialogId, senderId, text, createdAt)
+                    db.messageQueries.insertRemote(
+                        serverId, dialogId, senderId, text, createdAt, kind, targetUserId
+                    )
                 }
             }
             db.dialogQueries.bumpLastMessageAt(createdAt, dialogId)
+        }
+    }
+
+    suspend fun applySystemMessage(
+        serverId: String,
+        dialogId: String,
+        actorId: String,
+        kind: String,
+        targetUserId: String?,
+        title: String?,
+        createdAt: Long,
+        selfId: String?
+    ): Unit = withContext(dispatcher) {
+        if (kind == MessageKind.MEMBER_REMOVED && targetUserId != null && targetUserId == selfId) {
+            deleteDialogLocally(dialogId)
+            return@withContext
+        }
+        db.transaction {
+            db.dialogQueries.insertIfAbsent(dialogId, DialogType.GROUP, title, null, null)
+            db.sync_stateQueries.insertIfAbsent(dialogId)
+            if (title != null) db.dialogQueries.setTitle(title, dialogId)
+            val text = if (kind == MessageKind.GROUP_RENAMED) title.orEmpty() else ""
+            db.messageQueries.insertRemote(
+                serverId, dialogId, actorId, text, createdAt, kind, targetUserId
+            )
+            db.dialogQueries.bumpLastMessageAt(createdAt, dialogId)
+        }
+    }
+
+    suspend fun deleteDialog(dialogId: String): Unit = withContext(dispatcher) {
+        deleteDialogLocally(dialogId)
+    }
+
+    private fun deleteDialogLocally(dialogId: String) {
+        db.transaction {
+            db.messageQueries.deleteForDialog(dialogId)
+            db.sync_stateQueries.deleteByDialog(dialogId)
+            db.dialogQueries.deleteById(dialogId)
         }
     }
 
@@ -277,7 +323,9 @@ private fun Message.toDomain(): DomainMessage =
         failReason = fail_reason,
         attemptCount = attempt_count,
         nextRetryAt = next_retry_at,
-        firstAttemptAt = first_attempt_at
+        firstAttemptAt = first_attempt_at,
+        kind = kind,
+        targetUserId = target_user_id
     )
 
 private fun Sync_state.toDomain(): DialogSyncState =
@@ -300,7 +348,8 @@ private fun SelectAllWithPreview.toDomain(): DialogSummary =
         lastMessageText = last_text,
         lastMessageState = last_state?.let { MessageState.valueOf(it) },
         lastMessageSenderId = last_sender_id,
-        lastMessageCreatedAt = last_created_at
+        lastMessageCreatedAt = last_created_at,
+        lastMessageKind = last_kind
     )
 
 private fun Dialog.toDomain(): DomainDialog =

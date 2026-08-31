@@ -43,6 +43,46 @@ class InboundFrameParsingTest {
     }
 
     @Test
+    fun parsesMessageSystem() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"message.system","ts":1730000000200,
+               "payload":{"message_id":"m-1","dialog_id":"g-1","actor_id":"u-2",
+                          "kind":"member_added","target_user_id":"u-3","title":"team",
+                          "created_at":"2026-07-26T10:00:00Z"}}"""
+        )
+        val system = assertIs<InboundFrame.MessageSystem>(frame)
+        assertEquals("m-1", system.payload.messageId)
+        assertEquals("g-1", system.payload.dialogId)
+        assertEquals("u-2", system.payload.actorId)
+        assertEquals("member_added", system.payload.kind)
+        assertEquals("u-3", system.payload.targetUserId)
+        assertEquals("team", system.payload.title)
+    }
+
+    @Test
+    fun parsesMessageSystemWithNullTarget() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"message.system","ts":1730000000200,
+               "payload":{"message_id":"m-1","dialog_id":"g-1","actor_id":"u-2",
+                          "kind":"group_created","target_user_id":null,"title":"team",
+                          "created_at":"2026-07-26T10:00:00Z"}}"""
+        )
+        val system = assertIs<InboundFrame.MessageSystem>(frame)
+        assertNull(system.payload.targetUserId)
+    }
+
+    @Test
+    fun parsesDialogDeleted() {
+        val frame = parseInboundFrame(
+            """{"v":1,"type":"dialog.deleted","ts":1730000000200,
+               "payload":{"dialog_id":"g-1","actor_id":"u-2"}}"""
+        )
+        val deleted = assertIs<InboundFrame.DialogDeleted>(frame)
+        assertEquals("g-1", deleted.payload.dialogId)
+        assertEquals("u-2", deleted.payload.actorId)
+    }
+
+    @Test
     fun parsesReadReceipt() {
         val frame = parseInboundFrame(
             """{"v":1,"type":"message.read","ts":1730000000000,

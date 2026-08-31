@@ -11,7 +11,9 @@ CREATE TABLE message (
     fail_reason    TEXT,
     attempt_count  INTEGER NOT NULL DEFAULT 0,
     next_retry_at  INTEGER,
-    first_attempt_at INTEGER
+    first_attempt_at INTEGER,
+    kind           TEXT    NOT NULL DEFAULT 'user',
+    target_user_id TEXT
 );
 
 CREATE INDEX idx_message_dialog ON message(dialog_id, created_at DESC, local_id DESC);
@@ -22,8 +24,8 @@ INSERT INTO message(server_id, client_msg_id, dialog_id, sender_id, text, create
 VALUES (NULL, :clientMsgId, :dialogId, :senderId, :text, :createdAt, 'PENDING', 0, NULL);
 
 insertRemote:
-INSERT OR IGNORE INTO message(server_id, client_msg_id, dialog_id, sender_id, text, created_at, state)
-VALUES (:serverId, NULL, :dialogId, :senderId, :text, :createdAt, 'SENT');
+INSERT OR IGNORE INTO message(server_id, client_msg_id, dialog_id, sender_id, text, created_at, state, kind, target_user_id)
+VALUES (:serverId, NULL, :dialogId, :senderId, :text, :createdAt, 'SENT', :kind, :targetUserId);
 
 findByClientMsgId:
 SELECT * FROM message WHERE client_msg_id = :clientMsgId;
@@ -94,6 +96,9 @@ SELECT COUNT(*) FROM message WHERE dialog_id = :dialogId;
 
 countAll:
 SELECT COUNT(*) FROM message;
+
+deleteForDialog:
+DELETE FROM message WHERE dialog_id = :dialogId;
 
 deleteAll:
 DELETE FROM message;

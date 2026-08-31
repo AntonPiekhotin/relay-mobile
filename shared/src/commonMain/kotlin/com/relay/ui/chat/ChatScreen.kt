@@ -70,7 +70,7 @@ fun ChatScreen(
                 },
                 navigationIcon = { BackButton(onBack = onBack) },
                 actions = {
-                    if (state.peerId != null) {
+                    if (state.peerId != null || state.isGroup) {
                         IconButton(onClick = onCall, modifier = Modifier.testTag(CHAT_CALL_TAG)) {
                             PhoneGlyph(contentDescription = "Call ${state.title}")
                         }

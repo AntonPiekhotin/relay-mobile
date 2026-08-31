@@ -17,5 +17,8 @@ UPDATE sync_state SET newest_synced_id = :newestSyncedId WHERE dialog_id = :dial
 updateOldestLoaded:
 UPDATE sync_state SET oldest_loaded_id = :oldestLoadedId, has_more_history = :hasMoreHistory WHERE dialog_id = :dialogId;
 
+deleteByDialog:
+DELETE FROM sync_state WHERE dialog_id = :dialogId;
+
 deleteAll:
 DELETE FROM sync_state;

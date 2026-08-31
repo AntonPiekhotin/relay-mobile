@@ -29,6 +29,8 @@ sealed interface OpenDialogResult {
 
 interface MessageRepository {
     suspend fun openDirectDialog(peer: UserSummary): OpenDialogResult
+    suspend fun createGroupDialog(dialogId: String, title: String, memberIds: List<String>): OpenDialogResult
+    suspend fun dialogMembers(dialogId: String): List<String>?
     fun observeDialogs(): Flow<List<Dialog>>
     fun observeDialogSummaries(selfId: String?): Flow<List<DialogSummary>>
     fun observeDialog(dialogId: String): Flow<Dialog?>
@@ -69,6 +71,32 @@ class MessageRepositoryImpl(
                 "The server refused to open that conversation (HTTP ${result.status})"
             )
         }
+
+    override suspend fun createGroupDialog(
+        dialogId: String,
+        title: String,
+        memberIds: List<String>
+    ): OpenDialogResult =
+        when (val result = api.createGroupDialog(dialogId, title, memberIds)) {
+            is MessageApiResult.Success -> {
+                val created = result.value
+                store.upsertDialog(
+                    id = created.dialogId,
+                    type = created.type,
+                    title = created.title ?: title,
+                    lastMessageAt = created.lastMessageAt?.let { isoToEpochMillisOrNull(it) },
+                    peerId = null
+                )
+                OpenDialogResult.Opened(created.dialogId)
+            }
+            is MessageApiResult.Unavailable -> OpenDialogResult.Failed(result.reason)
+            is MessageApiResult.Rejected -> OpenDialogResult.Failed(
+                "The server refused to create that group (HTTP ${result.status})"
+            )
+        }
+
+    override suspend fun dialogMembers(dialogId: String): List<String>? =
+        (api.dialog(dialogId) as? MessageApiResult.Success)?.value?.participantIds
 
     override fun observeDialogs(): Flow<List<Dialog>> = store.observeDialogs()
 

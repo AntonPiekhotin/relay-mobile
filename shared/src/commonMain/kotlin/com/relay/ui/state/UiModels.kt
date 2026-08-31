@@ -9,7 +9,9 @@ data class MessageUi(
     val timestamp: String,
     val status: MessageStatusUi,
     val failReason: String? = null,
-    val daySeparator: String? = null
+    val daySeparator: String? = null,
+    val senderName: String? = null,
+    val isSystem: Boolean = false
 )
 
 data class DialogUi(
@@ -52,6 +54,7 @@ data class ChatState(
     val subtitle: String? = null,
     val isPeerTyping: Boolean = false,
     val peerId: String? = null,
+    val isGroup: Boolean = false,
     val messages: List<MessageUi> = emptyList(),
     val isLoadingOlder: Boolean = false,
     val hasMoreHistory: Boolean = false,
@@ -92,13 +95,18 @@ data class GroupCallUiState(
     val failure: String? = null
 )
 
-data class GroupCallPickerState(
+data class GroupCreateState(
+    val title: String = "",
+    val query: String = "",
     val contacts: List<PersonUi> = emptyList(),
-    val selectedIds: Set<String> = emptySet(),
-    val isStarting: Boolean = false,
+    val results: List<PersonUi> = emptyList(),
+    val selected: List<PersonUi> = emptyList(),
+    val isSearching: Boolean = false,
+    val isCreating: Boolean = false,
+    val hasSearched: Boolean = false,
     val error: String? = null
 ) {
-    val canStart: Boolean get() = selectedIds.isNotEmpty() && !isStarting
+    val canCreate: Boolean get() = selected.isNotEmpty() && !isCreating
 }
 
 data class DialogListState(

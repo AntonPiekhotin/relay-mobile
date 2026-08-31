@@ -236,6 +236,46 @@ rather than a lookup.
 Delivered on the same ordering domain as `message.new` for that dialog, so a receipt can never arrive
 before the message it acknowledges.
 
+#### `message.system` (S→C)
+
+```json
+{
+  "v": 1, "type": "message.system", "ts": 1730000000200,
+  "payload": {
+    "message_id": "...", "dialog_id": "...", "actor_id": "...",
+    "kind": "member_added", "target_user_id": "...", "title": "team",
+    "created_at": "2026-07-26T10:00:00Z"
+  }
+}
+```
+
+A membership system message: somebody created, renamed, joined, left, or changed a group (§5.6). A
+separate frame type rather than a widened `message.new`, so clients that predate groups ignore it by
+contract. Structured, never rendered text — the client builds the label itself.
+
+- `kind` is one of `group_created`, `member_added`, `member_removed`, `member_left`,
+  `group_renamed`; tolerate unknown kinds.
+- `target_user_id` is null for `group_created`/`group_renamed`, equals `actor_id` for
+  `member_left`, and is the affected member for add/remove. **If you are the target of a
+  `member_removed`, you are out** — drop the dialog locally.
+- `title` is the dialog's **current** title, already the new one on a rename — update the stored
+  title from it without a refetch.
+- The same row is served by history with the same `messageId` and a `kind` field, so live frame and
+  catch-up merge by id. On a history row, a rename's new title arrives in `text`.
+- System messages count toward `unreadCount`.
+
+#### `dialog.deleted` (S→C)
+
+```json
+{
+  "v": 1, "type": "dialog.deleted", "ts": 1730000000200,
+  "payload": { "dialog_id": "...", "actor_id": "..." }
+}
+```
+
+The group is gone, messages and all — `actor_id` is the owner who deleted it. Drop the dialog, its
+messages, and its sync state locally.
+
 #### `ping` / `pong`
 
 Client sends `ping` every 30s with an empty payload; server replies `pong` with `ref_id` echoing
@@ -534,6 +574,12 @@ live under `/api/v1/message/**`.
 | `GET` | `/api/v1/message/dialogs/{id}/messages?before=<cursor>&limit=50` | History, newest-first | **Implemented** |
 | `GET` | `/api/v1/message/dialogs/{id}/messages?after=<cursor>&limit=100` | Catch-up after reconnect | **Implemented** |
 | `POST` | `/api/v1/message/dialogs` | Open the direct dialog with one other user | **Implemented** |
+| `POST` | `/api/v1/message/dialogs/group` | Create a group dialog (§5.6) | **Implemented** |
+| `PUT` | `/api/v1/message/dialogs/{id}/title` | Rename a group (owner only) | **Implemented** |
+| `POST` | `/api/v1/message/dialogs/{id}/members` | Add members (owner only) | **Implemented** |
+| `DELETE` | `/api/v1/message/dialogs/{id}/members/{userId}` | Remove a member (owner only) | **Implemented** |
+| `POST` | `/api/v1/message/dialogs/{id}/leave` | Leave a group (any member but the owner) | **Implemented** |
+| `DELETE` | `/api/v1/message/dialogs/{id}` | Delete a group (owner only) | **Implemented** |
 | `POST` | `/api/v1/message/messages` | REST fallback send | Internal only today |
 | `GET` | `/api/v1/call/ice-servers` | STUN/TURN servers with short-lived credentials | **Implemented** |
 | `GET` | `/api/v1/call/calls?before=<callId>&limit=50` | Call log, newest-first | **Implemented** |
@@ -613,8 +659,11 @@ GET /api/v1/message/dialogs
     "participantIds": ["<caller>", "<peer>"],
     "lastMessageAt": "2026-07-26T10:00:00Z",
     "unreadCount": 3,
-    "createdAt": "2026-07-26T09:00:00Z" }
-] }
+    "createdAt": "2026-07-26T09:00:00Z",
+    "title": null,
+    "ownerId": null }
+  ],
+  "nextCursor": null }
 
 GET /api/v1/message/dialogs/{id}          → one element of the same shape, not wrapped
 
@@ -622,21 +671,27 @@ GET /api/v1/message/dialogs/{id}/messages
 
 200 → { "messages": [
   { "messageId": "...", "dialogId": "...", "senderId": "...",
-    "text": "...", "createdAt": "2026-07-26T10:00:00Z", "clientMsgId": "550e8400-..." }
+    "text": "...", "createdAt": "2026-07-26T10:00:00Z", "clientMsgId": "550e8400-...",
+    "kind": "user", "targetUserId": null }
   ],
   "nextCursor": "<messageId>" }
 ```
 
 **The dialog list**
 
-- **Ordered by `lastMessageAt`, most recent first**, and **unpaginated** — the whole list comes back
-  in one response. Safe today because a direct dialog only exists where somebody opened a
-  conversation; it will need a cursor when group dialogs land.
+- **Ordered by `lastMessageAt`, most recent first.** Paginated by `nextCursor` — a dialog id to pass
+  back as `cursor` for the following page, null on the last one. A client that never sends `cursor`
+  reads the first (and usually only) page.
 - `lastMessageAt` is **null for a dialog nobody has written in yet**, and those sort last. Never is
-  not the same as long ago.
-- **There is no `title` and no last-message preview.** A direct dialog is named by its members:
-  subtract yourself from `participantIds` and resolve the peer through `GET /api/v1/user/{id}`.
-  message-service holds no names, and an earlier draft of this section listing `title` was wrong.
+  not the same as long ago. A group is never in that state — creation writes a `group_created`
+  system message.
+- **`title` and `ownerId` are groups-only** — null on a `direct` dialog, whose name is its
+  membership: subtract yourself from `participantIds` and resolve the peer through
+  `GET /api/v1/user/{id}`. message-service holds no names. `ownerId` is the group's single admin,
+  null for legacy admin-less groups.
+- History rows carry `kind` — `user`, or a system kind (§4.1 `message.system`) — and
+  `targetUserId`. On a system row `senderId` is the actor and `text` is empty, except
+  `group_renamed`, which carries the new title.
 - `unreadCount` is **relative to the caller** — messages from other people past your own read cursor
   (§4.1). The same dialog has a different count for each participant, and your own messages never
   count.
@@ -895,6 +950,42 @@ DELETE /api/v1/notification/device-tokens/{deviceId}
   foregrounded app sees the callback.
 
 ---
+
+### 5.6 Group dialogs
+
+```
+POST /api/v1/message/dialogs/group
+{ "dialogId": "<client-generated UUID v4>", "title": "team", "memberIds": ["a", "b"] }
+
+201 → the §5.1 dialog-list shape, "type": "group", with title and ownerId set
+200 → the same dialogId retried — the create converged on the group it already made
+```
+
+- **`dialogId` is client-minted and is the idempotency key**, the same trick as `client_msg_id`: a
+  group has no natural uniqueness — the same three people may want two groups — so mint the UUID
+  once per create form and reuse it for every retry. A `409` means the id is taken by something
+  that is not your group.
+- The caller is implicit and always a member; `memberIds` names only the others. Minimum one other
+  member; the cap is **50 people including the caller**, and a create or add that would exceed it
+  is refused. Member ids are **not validated against user-service** — pick them from search or
+  contacts, never free-typed.
+- The creator becomes `ownerId` — the single admin. Rename, add, remove, and delete are owner-only
+  (`403` for a member, `404` for an outsider, `400` for a group operation aimed at a `direct`
+  dialog). The owner cannot `leave` (`422`) — they delete the group or keep it. No owner transfer.
+- Every mutation fans out as a `message.system` frame (§4.1) plus a history row; a delete fans out
+  as `dialog.deleted`. Sending into a group is the ordinary `message.send` — nothing about the
+  socket path is group-specific.
+
+```
+PUT    /api/v1/message/dialogs/{id}/title            { "title": "new name" }
+POST   /api/v1/message/dialogs/{id}/members          { "userIds": ["c"] }     ← adding an existing member is a no-op
+DELETE /api/v1/message/dialogs/{id}/members/{userId}
+POST   /api/v1/message/dialogs/{id}/leave            → 204
+DELETE /api/v1/message/dialogs/{id}                  → 204
+```
+
+The mobile client currently ships **create only** (the Groups tab); management calls are documented
+for when the management screen lands.
 
 ## 6. Idempotency and the send contract
 

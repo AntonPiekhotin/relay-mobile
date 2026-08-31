@@ -20,6 +20,8 @@ import com.relay.sync.ReadReceipts
 import com.relay.call.MicPermission
 import com.relay.testutil.FakeCallRepository
 import com.relay.testutil.FakeConnectionStatus
+import com.relay.testutil.FakeGroupCallRepository
+import com.relay.testutil.FakeUserRepository
 import com.relay.presence.PeerPresence
 import com.relay.testutil.FakeMessageApi
 import com.relay.testutil.FakePresenceRepository
@@ -91,6 +93,8 @@ private class ChatHarness(scope: TestScope) {
     val presence = AppPresence()
     val permissionRequests = PushPermissionRequests()
     val calls = FakeCallRepository()
+    val groupCalls = FakeGroupCallRepository()
+    val users = FakeUserRepository()
     val peerPresence = FakePresenceRepository()
     val mic = MicPermission(grantedByPlatform = true)
 
@@ -102,6 +106,8 @@ private class ChatHarness(scope: TestScope) {
         presence = presence,
         permissionRequests = permissionRequests,
         calls = calls,
+        groupCalls = groupCalls,
+        users = users,
         peerPresence = peerPresence,
         mic = mic,
         now = { FIXED_NOW }

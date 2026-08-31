@@ -3,6 +3,7 @@ package com.relay.ui.state
 import com.relay.model.Contact
 import com.relay.model.DialogSummary
 import com.relay.model.Message
+import com.relay.model.MessageKind
 import com.relay.model.MessageState
 import com.relay.model.UserProfile
 import com.relay.model.UserSearchResult
@@ -24,6 +25,8 @@ const val UNRESOLVED_PEER_TITLE = "Unknown user"
 const val TYPING_SUBTITLE = "typing…"
 const val ONLINE_SUBTITLE = "online"
 const val OFFLINE_SUBTITLE = "offline"
+const val UNRESOLVED_MEMBER_NAME = "Someone"
+const val SELF_MEMBER_NAME = "You"
 
 private const val MISSED_STATUS = "MISSED"
 private const val OUTGOING_DIRECTION = "OUTGOING"
@@ -59,34 +62,92 @@ fun messageStatusUi(state: MessageState, createdAt: Long, peerReadAt: Long?): Me
             }
     }
 
-fun List<Message>.toMessageUi(selfId: String?, nowMillis: Long, peerReadAt: Long?): List<MessageUi> =
+fun systemMessageLabel(
+    kind: String,
+    actorName: String,
+    targetName: String?,
+    newTitle: String
+): String = when (kind) {
+    MessageKind.GROUP_CREATED -> "$actorName created the group"
+    MessageKind.GROUP_RENAMED -> "$actorName renamed the group to “$newTitle”"
+    MessageKind.MEMBER_ADDED -> "$actorName added ${targetName ?: UNRESOLVED_MEMBER_NAME}"
+    MessageKind.MEMBER_REMOVED -> "$actorName removed ${targetName ?: UNRESOLVED_MEMBER_NAME}"
+    MessageKind.MEMBER_LEFT -> "$actorName left"
+    else -> "$actorName updated the conversation"
+}
+
+fun systemPreviewOf(kind: String): String = when (kind) {
+    MessageKind.GROUP_CREATED -> "Group created"
+    MessageKind.GROUP_RENAMED -> "Group renamed"
+    MessageKind.MEMBER_ADDED -> "Member added"
+    MessageKind.MEMBER_REMOVED -> "Member removed"
+    MessageKind.MEMBER_LEFT -> "Member left"
+    else -> "Conversation updated"
+}
+
+private fun memberNameOf(userId: String?, selfId: String?, names: Map<String, String>): String? =
+    when {
+        userId == null -> null
+        userId == selfId -> SELF_MEMBER_NAME
+        else -> names[userId] ?: UNRESOLVED_MEMBER_NAME
+    }
+
+fun List<Message>.toMessageUi(
+    selfId: String?,
+    nowMillis: Long,
+    peerReadAt: Long?,
+    isGroup: Boolean = false,
+    names: Map<String, String> = emptyMap()
+): List<MessageUi> =
     mapIndexed { index, message ->
         val olderNeighbour = getOrNull(index + 1)
         val startsDay = olderNeighbour == null ||
             dayKeyOf(olderNeighbour.createdAt) != dayKeyOf(message.createdAt)
+        val isSystem = MessageKind.isSystem(message.kind)
+        val isMine = !isSystem && selfId != null && message.senderId == selfId
+        val showSender = isGroup && !isSystem && !isMine &&
+            (olderNeighbour == null ||
+                olderNeighbour.senderId != message.senderId ||
+                MessageKind.isSystem(olderNeighbour.kind))
         MessageUi(
             localId = message.localId,
-            text = message.text,
-            isMine = selfId != null && message.senderId == selfId,
+            text = if (isSystem) {
+                systemMessageLabel(
+                    kind = message.kind,
+                    actorName = memberNameOf(message.senderId, selfId, names)
+                        ?: UNRESOLVED_MEMBER_NAME,
+                    targetName = memberNameOf(message.targetUserId, selfId, names),
+                    newTitle = message.text
+                )
+            } else {
+                message.text
+            },
+            isMine = isMine,
             timestamp = formatClockTime(message.createdAt),
             status = messageStatusUi(message.state, message.createdAt, peerReadAt),
             failReason = message.failReason,
-            daySeparator = if (startsDay) formatDaySeparator(message.createdAt, nowMillis) else null
+            daySeparator = if (startsDay) formatDaySeparator(message.createdAt, nowMillis) else null,
+            senderName = if (showSender) names[message.senderId] else null,
+            isSystem = isSystem
         )
     }
 
 fun List<DialogSummary>.toDialogUi(selfId: String?, nowMillis: Long): List<DialogUi> =
     map { summary ->
+        val previewIsSystem = summary.lastMessageKind?.let { MessageKind.isSystem(it) } ?: false
         DialogUi(
             id = summary.id,
             title = dialogTitleOf(summary.title),
-            preview = summary.lastMessageText ?: "No messages yet",
+            preview = when {
+                previewIsSystem -> systemPreviewOf(summary.lastMessageKind.orEmpty())
+                else -> summary.lastMessageText ?: "No messages yet"
+            },
             timestamp = summary.lastMessageAt?.let { formatListTimestamp(it, nowMillis) } ?: "",
             unreadCount = summary.unreadCount,
-            previewIsMine = selfId != null && summary.lastMessageSenderId == selfId,
-            previewStatus = summary.lastMessageState?.let {
-                messageStatusUi(it, summary.lastMessageCreatedAt ?: 0L, summary.peerReadAt)
-            }
+            previewIsMine = !previewIsSystem && selfId != null && summary.lastMessageSenderId == selfId,
+            previewStatus = summary.lastMessageState
+                ?.takeUnless { previewIsSystem }
+                ?.let { messageStatusUi(it, summary.lastMessageCreatedAt ?: 0L, summary.peerReadAt) }
         )
     }
 

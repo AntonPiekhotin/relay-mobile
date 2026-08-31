@@ -25,7 +25,9 @@ data class WireMessage(
     val senderId: String,
     val text: String,
     val createdAt: String,
-    val clientMsgId: String? = null
+    val clientMsgId: String? = null,
+    val kind: String = "user",
+    val targetUserId: String? = null
 )
 
 @Serializable
@@ -34,7 +36,9 @@ data class WireDialog(
     val type: String,
     val participantIds: List<String> = emptyList(),
     val lastMessageAt: String? = null,
-    val unreadCount: Long = 0
+    val unreadCount: Long = 0,
+    val title: String? = null,
+    val ownerId: String? = null
 )
 
 @Serializable
@@ -58,6 +62,13 @@ data class FallbackSendRequest(
 @Serializable
 data class OpenDirectDialogRequest(
     val peerId: String
+)
+
+@Serializable
+data class CreateGroupDialogRequest(
+    val dialogId: String,
+    val title: String,
+    val memberIds: List<String>
 )
 
 @Serializable
@@ -90,6 +101,12 @@ inline fun <T, R> MessageApiResult<T>.mapValue(transform: (T) -> R): MessageApiR
 
 interface MessageApi {
     suspend fun openDirectDialog(peerId: String): MessageApiResult<OpenedDialogResponse>
+    suspend fun createGroupDialog(
+        dialogId: String,
+        title: String,
+        memberIds: List<String>
+    ): MessageApiResult<WireDialog>
+    suspend fun dialog(dialogId: String): MessageApiResult<WireDialog>
     suspend fun dialogs(): MessageApiResult<List<WireDialog>>
     suspend fun messagesAfter(dialogId: String, after: String, limit: Int): MessageApiResult<List<WireMessage>>
     suspend fun messagesBefore(dialogId: String, before: String?, limit: Int): MessageApiResult<List<WireMessage>>
@@ -111,6 +128,22 @@ class KtorMessageApi(
                 setBody(OpenDirectDialogRequest(peerId))
             }
         }
+
+    override suspend fun createGroupDialog(
+        dialogId: String,
+        title: String,
+        memberIds: List<String>
+    ): MessageApiResult<WireDialog> =
+        execute { token ->
+            http.post("$base/dialogs/group") {
+                bearerAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody(CreateGroupDialogRequest(dialogId, title, memberIds))
+            }
+        }
+
+    override suspend fun dialog(dialogId: String): MessageApiResult<WireDialog> =
+        get("$base/dialogs/$dialogId") { }
 
     override suspend fun dialogs(): MessageApiResult<List<WireDialog>> =
         get<DialogListResponse>("$base/dialogs") { }.mapValue { it.dialogs }

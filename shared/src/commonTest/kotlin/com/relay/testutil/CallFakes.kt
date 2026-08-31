@@ -23,7 +23,9 @@ import com.relay.network.IceServerResponse
 import com.relay.network.IceServersResponse
 import com.relay.network.SfuAccessResponse
 import com.relay.network.SocketLifecycle
+import com.relay.call.GroupCallSession
 import com.relay.repository.CallRepository
+import com.relay.repository.GroupCallRepository
 import com.relay.protocol.CallSignal
 import com.relay.protocol.InboundFrame
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,6 +192,53 @@ class FakeCallRepository : CallRepository {
     }
 
     fun emit(session: CallSession?) {
+        mutableSession.value = session
+    }
+}
+
+class FakeGroupCallRepository : GroupCallRepository {
+    private val mutableSession = MutableStateFlow<GroupCallSession?>(null)
+    override val session: StateFlow<GroupCallSession?> = mutableSession.asStateFlow()
+
+    var startHandler: suspend (List<String>) -> PlaceCallResult =
+        { PlaceCallResult.Started("group-call-test") }
+    var nameHandler: suspend (String) -> String? = { it }
+
+    val started = mutableListOf<List<String>>()
+    var accepts = 0
+    var declines = 0
+    var leaves = 0
+    var micMuted = false
+    var speakerEnabled = false
+
+    override suspend fun start(inviteeIds: List<String>): PlaceCallResult {
+        started += inviteeIds
+        return startHandler(inviteeIds)
+    }
+
+    override suspend fun nameOf(userId: String): String? = nameHandler(userId)
+
+    override fun accept() {
+        accepts++
+    }
+
+    override fun decline() {
+        declines++
+    }
+
+    override fun leave() {
+        leaves++
+    }
+
+    override fun setMuted(muted: Boolean) {
+        micMuted = muted
+    }
+
+    override fun setSpeakerOn(enabled: Boolean) {
+        speakerEnabled = enabled
+    }
+
+    fun emit(session: GroupCallSession?) {
         mutableSession.value = session
     }
 }

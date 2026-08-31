@@ -32,11 +32,23 @@ fun MessageBubble(
         if (message.daySeparator != null) {
             DaySeparator(label = message.daySeparator)
         }
+        if (message.isSystem) {
+            SystemRow(label = message.text)
+            return@Column
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
             horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start
         ) {
             Column(horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start) {
+                if (message.senderName != null) {
+                    Text(
+                        text = message.senderName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
                 Surface(
                     color = bubbleColor(message.isMine),
                     contentColor = bubbleContentColor(message.isMine),
@@ -54,6 +66,17 @@ fun MessageBubble(
             }
         }
     }
+}
+
+@Composable
+private fun SystemRow(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp)
+    )
 }
 
 @Composable

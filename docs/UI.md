@@ -160,9 +160,14 @@ over what the DB already gave us, not a query, because there is no dialog-search
 filtering lives in `DialogListViewModel`, not the composable. **Contacts** carries the people search
 in the same position: below `MIN_SEARCH_LENGTH` characters it lists the contacts, above it the search
 hits, both through one `PeopleViewModel` so adding a contact from a hit updates both lists.
-**Groups** is the group-call entry — `GroupCallPickerScreen` embedded in the tab (`onBack = null`
-drops the back arrow); the web's Groups page creates group *dialogs*, which this client does not have
-yet. **Calls** reads `GET /api/v1/call/calls` through `CallsViewModel` — the one sanctioned
+**Groups** creates group *dialogs*, mirroring the web's Groups page — `GroupCreateScreen` embedded
+in the tab: an optional title field (left blank, the client names the group from its members —
+the server requires a non-blank title), a member picker that shows contacts below
+`MIN_SEARCH_LENGTH` characters and search hits above it (multi-select, capped at 50 including
+self), and a Create button that
+calls `POST /api/v1/message/dialogs/group` with a dialog id minted once per form
+(`GroupCreateViewModel`) and navigates into the new chat. Group calls start from the phone glyph in
+a group chat's top bar, not from this tab. **Calls** reads `GET /api/v1/call/calls` through `CallsViewModel` — the one sanctioned
 REST-into-state screen, because calls deliberately have no local table (see `docs/CALLS.md` §1);
 rows open the dialog's chat, the trailing phone glyph calls back. **Settings** is the read-only
 profile: name, email, member-since, and the logout button. **Log out lives there, nowhere else.**

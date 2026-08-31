@@ -241,8 +241,11 @@ refuses at join with `409` — a ringing invitee is never busy.
 
 **UI:** `CallHost` overlays whichever session is live (direct wins if both, which the gates make
 unreachable). `GroupCallScreen` shows the roster with per-participant state; the entry point is the
-dock's **Groups** tab, which is `GroupCallPickerScreen` embedded (no back arrow): a contact
-multi-select capped at 16 participants including self.
+phone glyph in a **group chat's** top bar (`ChatViewModel.call()`), which fetches the group's
+members via `GET /api/v1/message/dialogs/{id}` and invites everyone but the caller. The server
+still enforces the cap of 16 participants including self — calling a larger group is rejected and
+the reason surfaces in the chat's error banner. The dock's Groups tab creates group *dialogs* now,
+not calls (`docs/UI.md` §5).
 
 **Testing:** `GroupCallEngineTest` drives the machine over `FakeSocket` + `FakeGroupCallApi` +
 `FakeSfuClient`: create/join/decline/leave, roster deltas, `group_ended`, busy in both directions,

@@ -23,6 +23,8 @@ suspend fun MessageStore.applyWireMessage(message: WireMessage, selfId: String? 
         senderId = message.senderId,
         text = message.text,
         createdAt = isoToEpochMillis(message.createdAt),
-        selfId = selfId
+        selfId = selfId,
+        kind = message.kind,
+        targetUserId = message.targetUserId
     )
 }

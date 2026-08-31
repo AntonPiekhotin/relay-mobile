@@ -181,6 +181,38 @@ class MessageRepositoryTest {
     }
 
     @Test
+    fun createGroupDialogStoresTheGroupLocally() = runTest {
+        val harness = RepoHarness(this)
+        harness.logIn()
+
+        val result = harness.repository.createGroupDialog(
+            dialogId = "g1",
+            title = "team",
+            memberIds = listOf("a", "b")
+        )
+
+        assertIs<OpenDialogResult.Opened>(result)
+        assertEquals("g1", result.dialogId)
+        assertEquals(Triple("g1", "team", listOf("a", "b")), harness.api.createGroupCalls.single())
+        val stored = harness.store.observeDialog("g1").first()
+        assertEquals("group", stored?.type)
+        assertEquals("team", stored?.title)
+        assertEquals(null, stored?.peerId)
+    }
+
+    @Test
+    fun createGroupDialogSurfacesARejection() = runTest {
+        val harness = RepoHarness(this)
+        harness.logIn()
+        harness.api.createGroupHandler = { _, _, _ -> MessageApiResult.Rejected(409) }
+
+        val result = harness.repository.createGroupDialog("g1", "team", listOf("a"))
+
+        assertIs<OpenDialogResult.Failed>(result)
+        assertEquals(null, harness.store.observeDialog("g1").first())
+    }
+
+    @Test
     fun loadOlderUpdatesCursorAndStopsWhenHistoryIsExhausted() = runTest {
         val harness = RepoHarness(this)
         harness.store.upsertDialog("d1", "direct", null, null)

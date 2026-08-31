@@ -29,7 +29,7 @@ SQLDelight. `local_id` is the stable local identity; `server_id` and `client_msg
 CREATE TABLE dialog (
     id               TEXT    NOT NULL PRIMARY KEY,
     type             TEXT    NOT NULL,          -- 'direct' | 'group'
-    title            TEXT,                      -- cached peer name, null until resolved
+    title            TEXT,                      -- direct: cached peer name; group: the group title from the server
     last_message_at  INTEGER,
     unread_count     INTEGER NOT NULL DEFAULT 0, -- dead column, kept for migration continuity
     peer_id          TEXT,                      -- the other participant of a direct dialog
@@ -52,7 +52,9 @@ CREATE TABLE message (
     state          TEXT    NOT NULL,            -- 'PENDING' | 'SENT' | 'FAILED'
     fail_reason    TEXT,
     attempt_count  INTEGER NOT NULL DEFAULT 0,
-    next_retry_at  INTEGER
+    next_retry_at  INTEGER,
+    kind           TEXT    NOT NULL DEFAULT 'user', -- 'user' | a message.system kind
+    target_user_id TEXT                         -- the affected member on a system row
 );
 
 CREATE INDEX idx_message_dialog ON message(dialog_id, created_at DESC, local_id DESC);
@@ -89,6 +91,18 @@ the contact cache or `GET /api/v1/user/{id}`, and writes it back to `title` — 
 the column. A failed lookup writes nothing and is retried the next time the dialog row changes.
 `backfillPeersFromMessages` repairs rows stored before `peer_id` existed by taking the first message
 sender who is not you; a dialog nobody has written in stays unnamed until the peer speaks.
+
+**A group dialog is named by the server.** Its `title` comes with the dialog list during catch-up
+and from group creation, `peer_id` stays null (so `PeerNameResolver` never touches it), and a
+`message.system` frame carrying a non-null `title` overwrites it live. Because `peer_id` is null,
+the chat header shows no presence and the 1:1 call path is disabled; the member count shown in the
+header comes from `GET /api/v1/message/dialogs/{id}` fetched on open, not from the DB.
+
+**Group system rows and deletion.** A `message.system` frame is stored as an ordinary message row
+with its `kind` and `target_user_id` (text empty, except `group_renamed`, which stores the new
+title), so history catch-up and the live frame converge on the same `server_id`. A `member_removed`
+naming yourself, and a `dialog.deleted` frame, both delete the dialog, its messages, and its
+sync_state row locally — the server would answer 404 for that dialog from then on.
 
 ---
 
